@@ -25,10 +25,11 @@ logger = cast(_Logger, structlog.get_logger(__name__))
 
 
 class RankingService:
-    """Computes P_score = Q_content · R_relevance · T_timing · D_decay · U_urgency + ε_explore.
+    """Computes P_score = Q * R * T * D * U + eps.
 
-    Phase 2+ placeholders (R_relevance=1.0, T_timing=1.0, ε_explore=0.0) will be filled in
-    when knowledge graph matching and scheduling are implemented.
+    Phase 2+ placeholders (T_timing=1.0, eps_explore=0.0) will be filled in
+    when scheduling is implemented (Phase 3/4). R_relevance is now computed
+    by MatchingService (T32) and passed in as a parameter.
     """
 
     # Half-lives for decay factor
@@ -40,10 +41,15 @@ class RankingService:
         self,
         content: Content,
         now: datetime | None = None,
+        r_relevance: float = 1.0,
     ) -> float:
         """Compute P_score for a single content item.
 
-        Formula: P_score = Q_content · R_relevance · T_timing · D_decay · U_urgency + ε_explore
+        Formula: P_score = Q * R * T * D * U + eps
+
+        Args:
+            r_relevance: KG-based relevance score from MatchingService (T32).
+                         Defaults to 1.0 when matching is not available.
 
         Returns a float clamped to [0.0, 2.0].
         """
@@ -51,11 +57,10 @@ class RankingService:
             now = datetime.now(UTC)
 
         q_content = self._compute_q_content(content)
-        r_relevance = 1.0  # Phase 2: KG matching
         t_timing = 1.0  # Phase 3: user schedule window
         d_decay = self._compute_d_decay(content, now)
         u_urgency = self._compute_u_urgency(content)
-        epsilon_explore = 0.0  # Phase 4: ε-greedy
+        epsilon_explore = 0.0  # Phase 4: eps-greedy
 
         p_score = q_content * r_relevance * t_timing * d_decay * u_urgency + epsilon_explore
 

@@ -32,6 +32,16 @@ export class AliceApiClient {
   async searchContent(q: string, limit = 20, offset = 0): Promise<SearchResult> {
     return this.request(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`);
   }
+  async getFeed(page = 1, limit = 20, sort = 'relevance'): Promise<ContentItem[]> {
+    return this.request(`/api/v1/content?page=${page}&limit=${limit}&sort=${sort}`);
+  }
+
+  async submitFeedback(contentId: number, type: string): Promise<void> {
+    return this.request('/api/v1/feedback', {
+      method: 'POST',
+      body: JSON.stringify({ content_id: contentId, feedback_type: type }),
+    });
+  }
 
   async getSources(): Promise<Source[]> {
     return this.request('/api/v1/sources');

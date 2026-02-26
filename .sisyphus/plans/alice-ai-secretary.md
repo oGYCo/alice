@@ -2976,7 +2976,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/kg_updater.py`, `tests/unit/test_kg_updater.py`
   - Pre-commit: `uv run pytest tests/unit/test_kg_updater.py -v`
 
-- [ ] 38. Phase 2 Integration Tests
+- [x] 38. Phase 2 Integration Tests
 
   **What to do**:
   - `tests/integration/test_phase2_integration.py`:

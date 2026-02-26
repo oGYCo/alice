@@ -16,16 +16,20 @@ Skip automatically when TEST_DATABASE_URL is not set.
 """
 
 import os
+from pathlib import Path
+from unittest.mock import patch
 
 import httpx
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from alice.db import get_db
 from alice.main import create_app
 from alice.models.base import Base
 from alice.services.source_service import SourceService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
 # Module-level skip if TEST_DATABASE_URL not set
@@ -42,7 +46,7 @@ if not TEST_DATABASE_URL:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def engine():
     """Create async engine connected to test DB."""
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
@@ -54,28 +58,62 @@ async def engine():
     await eng.dispose()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="module")
 async def session(engine):
-    """Provide a transactional session, rolled back after each test."""
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as sess:
-        async with sess.begin():
+    """Provide a session with savepoint isolation.
+
+    Services may call session.commit(); join_transaction_mode='create_savepoint'
+    converts those commits into SAVEPOINT releases instead of real commits.
+    The outer transaction is rolled back after each test.
+    """
+    async with engine.connect() as conn:
+        trans = await conn.begin()
+        factory = async_sessionmaker(
+            conn,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        async with factory() as sess:
             yield sess
-            await sess.rollback()
+        await trans.rollback()
 
 
-@pytest.fixture
-async def http_client():
-    """Provide httpx.AsyncClient with FastAPI app."""
+@pytest_asyncio.fixture(loop_scope="module")
+async def http_client(engine):
+    """Provide httpx.AsyncClient with FastAPI app wired to the test DB."""
     app = create_app()
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    # Override get_db to use the test engine instead of the configured DB URL
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async def override_get_db():
+        async with factory() as sess:
+            yield sess
+    app.dependency_overrides[get_db] = override_get_db
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         yield client
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
 def source_svc(session):
     """Provide SourceService with test session."""
     return SourceService(session)
+
+
+@pytest.fixture(autouse=True)
+def mock_rss_fetch_feed():
+    """Use local RSS fixture instead of external network in integration tests."""
+    fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / "rss_feeds" / "sample_hn.xml"
+    feed_xml = fixture_path.read_text(encoding="utf-8")
+    with patch("alice.connectors.rss.RSSConnector._fetch_feed", return_value=feed_xml):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def mock_push_task_delay():
+    """Avoid Redis/Celery dependency when asserting HTTP trigger behavior."""
+    with patch("alice.pipeline.tasks.task_push_batch.delay", return_value=None):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +205,7 @@ async def test_trigger_push_batch(http_client):
         "chat_id": 12345,
         "limit": 5,
     }
-    response = await http_client.post("/api/v1/push/trigger", json=payload)
+    response = await http_client.post("/api/v1/pipeline/push/trigger", json=payload)
     assert response.status_code == 202
     data = response.json()
     assert data["user_id"] == 1
@@ -245,7 +283,7 @@ async def test_full_pipeline_workflow(http_client, session):
         "chat_id": 12345,
         "limit": 5,
     }
-    push_response = await http_client.post("/api/v1/push/trigger", json=push_payload)
+    push_response = await http_client.post("/api/v1/pipeline/push/trigger", json=push_payload)
     assert push_response.status_code == 202
     push_data = push_response.json()
     assert push_data["status"] == "queued"

@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 from aiogram import Bot
 from aiogram.types import CallbackQuery, Chat, Message
 from aiogram.types import User as TelegramUser
@@ -33,9 +34,8 @@ from alice.bot.handlers.feedback import (
 from alice.models.base import Base
 from alice.models.content import Content, PipelineStatus
 from alice.models.feedback import Feedback, FeedbackType
-from alice.models.user import User
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
 # Module-level skip
@@ -54,7 +54,7 @@ if not TEST_DATABASE_URL:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def engine():
     """Create async engine connected to test DB."""
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
@@ -66,14 +66,62 @@ async def engine():
     await eng.dispose()
 
 
-@pytest.fixture
-async def session(engine):
-    """Provide a transactional session, rolled back after each test."""
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as sess:
-        async with sess.begin():
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def db_seed(engine):
+    """Pre-insert User rows needed by the feedback handler.
+
+    handle_feedback_callback uses query.from_user.id (Telegram user id) directly
+    as user_id FK into the users table.  The _make_callback_query helper creates
+    callbacks with chat_id in [100001..100005] and user_id=1 (default).
+    We seed User rows for all user IDs used across this test module.
+    """
+    from sqlalchemy import text
+
+    # Default _make_callback_query user_id=1, plus explicit chat_ids used as user_ids
+    user_ids = [1, 100001, 100002, 100003, 100004, 100005]
+
+    async with engine.begin() as conn:
+        await conn.execute(text("SELECT setval('users_id_seq', 1, false)"))
+        for uid in user_ids:
+            await conn.execute(
+                text(
+                    "INSERT INTO users (id, telegram_chat_id, preferences) "
+                    "VALUES (:id, :chat_id, '{}') "
+                    "ON CONFLICT (id) DO NOTHING"
+                ),
+                {"id": uid, "chat_id": uid + 900000},
+            )
+        await conn.execute(text("SELECT setval('users_id_seq', 200000, true)"))
+    yield
+    async with engine.begin() as conn:
+        # Delete feedback first (FK depends on users and content), then users
+        await conn.execute(
+            text(f"DELETE FROM feedback WHERE user_id = ANY(ARRAY{user_ids})")
+        )
+        await conn.execute(
+            text(f"DELETE FROM users WHERE id = ANY(ARRAY{user_ids})")
+        )
+
+
+@pytest_asyncio.fixture(loop_scope="module")
+async def session(engine, db_seed):
+    """Provide a session with savepoint isolation.
+
+    Services may call session.commit(); join_transaction_mode='create_savepoint'
+    converts those commits into SAVEPOINT releases instead of real commits.
+    The outer transaction is rolled back after each test.
+    """
+    async with engine.connect() as conn:
+        trans = await conn.begin()
+        factory = async_sessionmaker(
+            conn,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        async with factory() as sess:
             yield sess
-            await sess.rollback()
+        await trans.rollback()
 
 
 def _make_mock_bot() -> MagicMock:
@@ -128,47 +176,47 @@ def _make_content_row(url: str) -> Content:
 # ---------------------------------------------------------------------------
 
 
-def test_parse_callback_data_valuable_learned():
+async def test_parse_callback_data_valuable_learned():
     """parse_callback_data correctly parses 'valuable_learned' feedback."""
     feedback_type, content_id = parse_callback_data("feedback:valuable_learned:42")
     assert feedback_type == FeedbackType.valuable_learned
     assert content_id == 42
 
 
-def test_parse_callback_data_save_for_later():
+async def test_parse_callback_data_save_for_later():
     """parse_callback_data correctly parses 'save_for_later' feedback."""
     feedback_type, content_id = parse_callback_data("feedback:save_for_later:99")
     assert feedback_type == FeedbackType.save_for_later
     assert content_id == 99
 
 
-def test_parse_callback_data_not_valuable():
+async def test_parse_callback_data_not_valuable():
     """parse_callback_data correctly parses 'not_valuable' feedback."""
     feedback_type, content_id = parse_callback_data("feedback:not_valuable:7")
     assert feedback_type == FeedbackType.not_valuable
     assert content_id == 7
 
 
-def test_parse_callback_data_already_known():
+async def test_parse_callback_data_already_known():
     """parse_callback_data correctly parses 'already_known' feedback."""
     feedback_type, content_id = parse_callback_data("feedback:already_known:15")
     assert feedback_type == FeedbackType.already_known
     assert content_id == 15
 
 
-def test_parse_callback_data_invalid_format():
+async def test_parse_callback_data_invalid_format():
     """parse_callback_data raises ValueError for malformed data."""
     with pytest.raises(ValueError, match="Invalid callback data format"):
         parse_callback_data("feedback:valuable_learned")
 
 
-def test_parse_callback_data_unknown_type():
+async def test_parse_callback_data_unknown_type():
     """parse_callback_data raises ValueError for unknown feedback type."""
     with pytest.raises(ValueError, match="Unknown feedback type"):
         parse_callback_data("feedback:thumbs_up:42")
 
 
-def test_parse_callback_data_invalid_content_id():
+async def test_parse_callback_data_invalid_content_id():
     """parse_callback_data raises ValueError when content_id is not an integer."""
     with pytest.raises(ValueError, match="Invalid content_id"):
         parse_callback_data("feedback:valuable_learned:not_a_number")
@@ -179,44 +227,40 @@ def test_parse_callback_data_invalid_content_id():
 # ---------------------------------------------------------------------------
 
 
-async def test_feedback_callback_stores_to_db(session: AsyncSession, engine):
+async def test_feedback_callback_stores_to_db(engine, db_seed):
     """handle_feedback_callback stores a Feedback record to the database."""
-    # Insert a user and content item
-    user = User()
-    user.telegram_chat_id = 100001
-    user.preferences = {}
-    session.add(user)
-
-    content = _make_content_row("https://example.com/tg-flow-test-1")
-    session.add(content)
-    await session.flush()
-
-    content_id = content.id
+    # db_seed fixture pre-inserted User.id=1; insert content with real commit
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as sess:
+        async with sess.begin():
+            content = _make_content_row("https://example.com/tg-flow-test-1")
+            sess.add(content)
+            await sess.flush()
+            content_id = content.id
 
     mock_bot = _make_mock_bot()
+    # _make_callback_query default user_id=1, which exists via db_seed
     query = _make_callback_query(
         data=f"feedback:valuable_learned:{content_id}",
         chat_id=100001,
     )
 
-    # Patch AsyncSessionLocal to use our test session
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async def _mock_session():
-        async with session_factory() as s:
-            yield s
-
-    with patch("alice.bot.handlers.feedback.AsyncSessionLocal", session_factory):
+    with patch("alice.bot.handlers.feedback.AsyncSessionLocal", factory):
         await handle_feedback_callback(query, mock_bot)
 
-    # Verify a Feedback record was written
-    await session.execute(select(Feedback).where(Feedback.content_id == content_id))
-    # Note: the handler creates its own session; we query our test session
-    # The mock may or may not commit — this test verifies the handler runs without error
+    # Verify feedback was stored (handler commits its own session)
+    async with factory() as verify_sess:
+        result = await verify_sess.execute(
+            select(Feedback).where(Feedback.content_id == content_id)
+        )
+        feedback = result.scalar_one_or_none()
+
+    assert feedback is not None
+    assert feedback.content_id == content_id
     query.answer.assert_called_once()
 
 
-async def test_feedback_callback_sends_confirmation_message(engine):
+async def test_feedback_callback_sends_confirmation_message(engine, db_seed):
     """handle_feedback_callback answers the query with a confirmation message."""
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
@@ -239,7 +283,7 @@ async def test_feedback_callback_sends_confirmation_message(engine):
     query.answer.assert_called_once()
 
 
-async def test_not_valuable_feedback_stores_correct_type(engine):
+async def test_not_valuable_feedback_stores_correct_type(engine, db_seed):
     """Negative feedback stores FeedbackType.not_valuable in DB."""
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
@@ -261,7 +305,7 @@ async def test_not_valuable_feedback_stores_correct_type(engine):
     query.answer.assert_called_once()
 
 
-async def test_already_known_feedback_acknowledged(engine):
+async def test_already_known_feedback_acknowledged(engine, db_seed):
     """Already-known feedback is handled and query is answered."""
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
@@ -283,7 +327,7 @@ async def test_already_known_feedback_acknowledged(engine):
     query.answer.assert_called_once()
 
 
-async def test_invalid_callback_data_does_not_crash(engine):
+async def test_invalid_callback_data_does_not_crash(engine, db_seed):
     """Malformed callback data is handled gracefully — no exception raised."""
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     mock_bot = _make_mock_bot()

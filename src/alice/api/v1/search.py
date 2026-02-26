@@ -82,6 +82,9 @@ async def suggest_content(
     if q.strip() == "":
         return SuggestResponseSchema(suggestions=[], query="")
 
-    result = svc.search(q, limit=limit)
+    try:
+        result = svc.search(q, limit=limit)
+    except meilisearch.errors.MeilisearchApiError:
+        raise HTTPException(status_code=503, detail="Search service unavailable")
     titles = [h["title"] for h in result.get("hits", []) if h.get("title")]
     return SuggestResponseSchema(suggestions=titles, query=q)

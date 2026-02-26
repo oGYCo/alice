@@ -9,8 +9,10 @@ Skip automatically when TEST_DATABASE_URL is not set.
 """
 
 import os
+from unittest.mock import patch
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from alice.models.base import Base
@@ -19,7 +21,7 @@ from alice.pipeline.orchestrator import PipelineOrchestrator
 from alice.schemas.content import RawContentSchema
 from alice.services.storage import ContentStorageService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
 # Module-level skip if TEST_DATABASE_URL not set
@@ -36,7 +38,7 @@ if not TEST_DATABASE_URL:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def engine():
     """Create async engine connected to test DB."""
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
@@ -48,14 +50,25 @@ async def engine():
     await eng.dispose()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="module")
 async def session(engine):
-    """Provide a transactional session, rolled back after each test."""
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as sess:
-        async with sess.begin():
+    """Provide a session with savepoint isolation.
+
+    Services may call session.commit(); join_transaction_mode='create_savepoint'
+    converts those commits into SAVEPOINT releases instead of real commits.
+    The outer transaction is rolled back after each test.
+    """
+    async with engine.connect() as conn:
+        trans = await conn.begin()
+        factory = async_sessionmaker(
+            conn,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        async with factory() as sess:
             yield sess
-            await sess.rollback()
+        await trans.rollback()
 
 
 @pytest.fixture
@@ -68,6 +81,17 @@ def content_svc(session):
 def orchestrator(content_svc):
     """Provide PipelineOrchestrator with test storage."""
     return PipelineOrchestrator(content_svc)
+
+
+@pytest.fixture(autouse=True)
+def mock_pipeline_task_delay():
+    """Avoid Redis/Celery dependency when testing orchestrator stage transitions."""
+    with (
+        patch("alice.pipeline.tasks.task_run_understanding.delay", return_value=None),
+        patch("alice.pipeline.tasks.task_run_scoring.delay", return_value=None),
+        patch("alice.pipeline.tasks.task_run_indexing.delay", return_value=None),
+    ):
+        yield
 
 
 # ---------------------------------------------------------------------------

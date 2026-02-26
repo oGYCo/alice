@@ -12,6 +12,7 @@ import os
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -19,7 +20,7 @@ from alice.bot.handlers.feedback import handle_feedback_callback, parse_callback
 from alice.models.base import Base
 from alice.models.feedback import Feedback, FeedbackType
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
 # Skip logic
@@ -37,7 +38,7 @@ if not TEST_DATABASE_URL:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def engine():
     """Create async engine connected to test DB."""
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
@@ -49,14 +50,88 @@ async def engine():
     await eng.dispose()
 
 
-@pytest.fixture
-async def session(engine):
-    """Provide a transactional session, rolled back after each test."""
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as sess:
-        async with sess.begin():
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def db_seed(engine):
+    """Pre-insert Content and User rows with specific IDs for FK constraints in tests.
+
+    The feedback handler uses query.from_user.id directly as user_id (FK → users.id).
+    We must pre-insert User rows with those exact IDs, and Content rows with the
+    hardcoded content_ids used in each test.
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy import text
+
+    content_ids = [123, 200, 456, 500, 600, 601, 700]
+    # These are the Telegram user IDs used in tests, stored as users.id via handler
+    user_ids = [999, 888, 111, 222, 1001, 1002, 2000, 3000]
+
+    async with engine.begin() as conn:
+        # Seed users with forced IDs
+        await conn.execute(text("SELECT setval('users_id_seq', 100, false)"))
+        for uid in user_ids:
+            await conn.execute(
+                text(
+                    "INSERT INTO users (id, telegram_chat_id, preferences) "
+                    "VALUES (:id, :chat_id, '{}') "
+                    "ON CONFLICT (id) DO NOTHING"
+                ),
+                {"id": uid, "chat_id": uid * 10},  # unique chat_id != id
+            )
+        await conn.execute(text("SELECT setval('users_id_seq', 10000, true)"))
+
+        # Seed content rows with forced IDs
+        await conn.execute(text("SELECT setval('content_id_seq', 100, false)"))
+        for cid in content_ids:
+            await conn.execute(
+                text(
+                    "INSERT INTO content (id, source, source_url, title, metadata, "
+                    "pipeline_status, fetched_at, domains, key_points, estimated_read_time) "
+                    "VALUES (:id, 'rss', :url, :title, '{}', 'indexed', :now, '[]', '[]', 1) "
+                    "ON CONFLICT (id) DO NOTHING"
+                ),
+                {
+                    "id": cid,
+                    "url": f"https://example.com/seed/{cid}",
+                    "title": f"Seed article {cid}",
+                    "now": datetime.now(UTC),
+                },
+            )
+        # Advance the sequences past our seeded IDs
+        await conn.execute(text("SELECT setval('content_id_seq', 1000, true)"))
+    yield
+    # Cleanup (feedback FK-depends on content/users, clean feedback first)
+    async with engine.begin() as conn:
+        await conn.execute(
+            text(f"DELETE FROM feedback WHERE content_id = ANY(ARRAY{content_ids})")
+        )
+        await conn.execute(
+            text(f"DELETE FROM content WHERE id = ANY(ARRAY{content_ids})")
+        )
+        await conn.execute(
+            text(f"DELETE FROM users WHERE id = ANY(ARRAY{user_ids})")
+        )
+
+
+@pytest_asyncio.fixture(loop_scope="module")
+async def session(engine, db_seed):
+    """Provide a session with savepoint isolation.
+
+    Services may call session.commit(); join_transaction_mode='create_savepoint'
+    converts those commits into SAVEPOINT releases instead of real commits.
+    The outer transaction is rolled back after each test.
+    """
+    async with engine.connect() as conn:
+        trans = await conn.begin()
+        factory = async_sessionmaker(
+            conn,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        async with factory() as sess:
             yield sess
-            await sess.rollback()
+        await trans.rollback()
 
 
 # ---------------------------------------------------------------------------
@@ -64,53 +139,53 @@ async def session(engine):
 # ---------------------------------------------------------------------------
 
 
-def test_parse_callback_data_valid_valuable_learned():
+async def test_parse_callback_data_valid_valuable_learned():
     """parse_callback_data handles 'feedback:valuable_learned:42'."""
     feedback_type, content_id = parse_callback_data("feedback:valuable_learned:42")
     assert feedback_type == FeedbackType.valuable_learned
     assert content_id == 42
 
 
-def test_parse_callback_data_valid_save_for_later():
+async def test_parse_callback_data_valid_save_for_later():
     """parse_callback_data handles 'feedback:save_for_later:99'."""
     feedback_type, content_id = parse_callback_data("feedback:save_for_later:99")
     assert feedback_type == FeedbackType.save_for_later
     assert content_id == 99
 
 
-def test_parse_callback_data_valid_not_valuable():
+async def test_parse_callback_data_valid_not_valuable():
     """parse_callback_data handles 'feedback:not_valuable:1'."""
     feedback_type, content_id = parse_callback_data("feedback:not_valuable:1")
     assert feedback_type == FeedbackType.not_valuable
     assert content_id == 1
 
 
-def test_parse_callback_data_valid_already_known():
+async def test_parse_callback_data_valid_already_known():
     """parse_callback_data handles 'feedback:already_known:777'."""
     feedback_type, content_id = parse_callback_data("feedback:already_known:777")
     assert feedback_type == FeedbackType.already_known
     assert content_id == 777
 
 
-def test_parse_callback_data_invalid_format_missing_parts():
+async def test_parse_callback_data_invalid_format_missing_parts():
     """parse_callback_data raises ValueError for 'feedback:valuable_learned' (missing content_id)."""
     with pytest.raises(ValueError, match="Invalid callback data format"):
         parse_callback_data("feedback:valuable_learned")
 
 
-def test_parse_callback_data_invalid_format_wrong_prefix():
+async def test_parse_callback_data_invalid_format_wrong_prefix():
     """parse_callback_data raises ValueError for 'action:valuable_learned:42'."""
     with pytest.raises(ValueError, match="Invalid callback data format"):
         parse_callback_data("action:valuable_learned:42")
 
 
-def test_parse_callback_data_unknown_feedback_type():
+async def test_parse_callback_data_unknown_feedback_type():
     """parse_callback_data raises ValueError for unknown feedback type."""
     with pytest.raises(ValueError, match="Unknown feedback type"):
         parse_callback_data("feedback:unknown_type:42")
 
 
-def test_parse_callback_data_invalid_content_id():
+async def test_parse_callback_data_invalid_content_id():
     """parse_callback_data raises ValueError for non-integer content_id."""
     with pytest.raises(ValueError, match="Invalid content_id in callback data"):
         parse_callback_data("feedback:valuable_learned:not_a_number")

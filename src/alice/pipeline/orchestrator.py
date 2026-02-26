@@ -101,6 +101,10 @@ class PipelineOrchestrator:
             )
             return
 
+        # "gatekeeper" with passed=True is equivalent to "gatekept"
+        if current_stage == "gatekeeper":
+            current_stage = "gatekept"
+
         # Map stage name → dispatch next task
         known_stages = {"gatekept", "understood", "scored", "indexed"}
         if current_stage not in known_stages:
@@ -113,7 +117,10 @@ class PipelineOrchestrator:
                 extra={"content_id": content_id, "from_stage": current_stage},
             )
         else:
-            # Terminal stage — pipeline complete
+            # Terminal stage — update status to indexed and mark pipeline complete
+            await self._storage.update_pipeline_status(
+                content_id, PipelineStatus.indexed
+            )
             logger.info(
                 "pipeline_complete",
                 extra={"content_id": content_id},

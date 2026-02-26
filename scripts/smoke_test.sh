@@ -63,20 +63,25 @@ else
   exit 1
 fi
 
-# 4. POST an RSS source
-echo "4. Adding RSS source..."
+# 4. Run database migrations
+echo "4. Running database migrations..."
+docker compose exec -T api alembic upgrade head
+echo "   ✓ Alembic migrations applied"
+
+# 5. POST an RSS source
+echo "5. Adding RSS source..."
 SOURCE_RESPONSE=$(curl -sf -X POST "${API_URL}/api/v1/sources" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Smoke Test Feed",
-    "url": "https://feeds.arstechnica.com/arstechnica/index",
-    "source_type": "rss"
+    "name": "Example Feed",
+    "url": "http://example.com",
+    "type": "rss"
   }')
 
-SOURCE_ID=$(echo "$SOURCE_RESPONSE" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
+SOURCE_ID=$(echo "$SOURCE_RESPONSE" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4 || true)
 if [ -z "$SOURCE_ID" ]; then
   # Try alternate JSON structure
-  SOURCE_ID=$(echo "$SOURCE_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | cut -d':' -f2)
+  SOURCE_ID=$(echo "$SOURCE_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | cut -d':' -f2 || true)
 fi
 
 if [ -z "$SOURCE_ID" ]; then
@@ -88,22 +93,25 @@ fi
 
 echo "   ✓ RSS source added (ID: $SOURCE_ID)"
 
-# 5. Trigger a fetch
-echo "5. Triggering RSS fetch..."
+# 6. Trigger a fetch
+echo "6. Triggering RSS fetch..."
 FETCH_RESPONSE=$(curl -sf -X POST "${API_URL}/api/v1/connectors/rss/fetch" \
   -H "Content-Type: application/json" \
-  -d "{\"source_id\": \"$SOURCE_ID\"}")
+  -d '{
+    "feed_url": "http://example.com",
+    "limit": 10
+  }')
 
 echo "   ✓ Fetch triggered"
 
-# 6. Wait for content processing
-echo "6. Waiting for content to be processed (30 seconds)..."
+# 7. Wait for content processing
+echo "7. Waiting for content to be processed (30 seconds)..."
 sleep 30
 
-# 7. Check for content
-echo "7. Checking for fetched content..."
+# 8. Check for content
+echo "8. Checking for fetched content..."
 CONTENT_RESPONSE=$(curl -sf "${API_URL}/api/v1/content?limit=10")
-CONTENT_COUNT=$(echo "$CONTENT_RESPONSE" | grep -o '"id"' | wc -l)
+CONTENT_COUNT=$(echo "$CONTENT_RESPONSE" | grep -o '"id"' | wc -l || true)
 
 if [ "$CONTENT_COUNT" -gt 0 ]; then
   echo "   ✓ Found $CONTENT_COUNT content items"

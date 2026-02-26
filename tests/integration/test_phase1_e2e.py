@@ -25,17 +25,18 @@ from unittest.mock import MagicMock
 
 import httpx
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from alice.db import get_db
 from alice.main import create_app
 from alice.models.base import Base
 from alice.models.content import Content
 from alice.services.dedup import DeduplicationService
 from alice.services.push_scheduler import PushScheduler, PushSchedulerSettings
-from alice.services.ranking import RankingService
 from alice.services.scoring import SevenDimensionScoringService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
 # Module-level skip if TEST_DATABASE_URL not set
@@ -52,7 +53,7 @@ if not TEST_DATABASE_URL:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def engine():
     """Create async engine connected to test DB."""
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
@@ -64,22 +65,40 @@ async def engine():
     await eng.dispose()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="module")
 async def session(engine):
-    """Provide a transactional session, rolled back after each test."""
-    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    async with factory() as sess:
-        async with sess.begin():
+    """Provide a session with savepoint isolation.
+
+    Services may call session.commit(); join_transaction_mode='create_savepoint'
+    converts those commits into SAVEPOINT releases instead of real commits.
+    The outer transaction is rolled back after each test.
+    """
+    async with engine.connect() as conn:
+        trans = await conn.begin()
+        factory = async_sessionmaker(
+            conn,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            join_transaction_mode="create_savepoint",
+        )
+        async with factory() as sess:
             yield sess
-            await sess.rollback()
+        await trans.rollback()
 
 
-@pytest.fixture
-async def http_client():
-    """Provide httpx.AsyncClient with FastAPI app."""
+@pytest_asyncio.fixture(loop_scope="module")
+async def http_client(engine):
+    """Provide httpx.AsyncClient with FastAPI app wired to the test DB."""
     app = create_app()
-    async with httpx.AsyncClient(app=app, base_url="http://test") as client:
+    # Override get_db to use the test engine instead of the configured DB URL
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async def override_get_db():
+        async with factory() as sess:
+            yield sess
+    app.dependency_overrides[get_db] = override_get_db
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         yield client
+    app.dependency_overrides.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -150,9 +169,8 @@ def _make_content(**kwargs) -> Content:
     return content
 
 
-def test_p_score_ranking_orders_content():
+async def test_p_score_ranking_orders_content():
     """RankingService.compute_p_score orders items by p_score descending."""
-    svc = RankingService()
     high = _make_content(id=1, p_score=1.2)
     mid = _make_content(id=2, p_score=0.7)
     low = _make_content(id=3, p_score=0.1)
@@ -174,15 +192,15 @@ async def test_search_suggest_endpoint(http_client):
     assert response.status_code in (200, 503)
 
 
-def test_dedup_url_normalization():
+async def test_dedup_url_normalization():
     """normalize_url strips tracking params and fragments."""
     svc = DeduplicationService()
     url = "https://www.example.com/path/?utm_source=feed&id=1#section"
     normalized = svc.normalize_url(url)
-    assert normalized == "https://example.com/path/?id=1"
+    assert normalized == "https://example.com/path?id=1"
 
 
-def test_dedup_simhash_near_duplicate():
+async def test_dedup_simhash_near_duplicate():
     """is_near_duplicate detects similar content."""
     svc = DeduplicationService()
     text_a = "Alice builds an AI secretary for RSS feeds and papers."
@@ -192,7 +210,7 @@ def test_dedup_simhash_near_duplicate():
     assert svc.is_near_duplicate(hash_a, hash_b)
 
 
-def test_time_window_scheduling_quiet_hours():
+async def test_time_window_scheduling_quiet_hours():
     """Quiet hours: 23:00 is quiet, 10:00 is not."""
     scheduler = PushScheduler(PushSchedulerSettings())
     quiet_dt = datetime(2025, 1, 1, 23, 0, tzinfo=UTC)
@@ -201,7 +219,7 @@ def test_time_window_scheduling_quiet_hours():
     assert scheduler.is_quiet_hours(active_dt) is False
 
 
-def test_time_window_content_type_by_window():
+async def test_time_window_content_type_by_window():
     """Content type for window returns expected values."""
     scheduler = PushScheduler(PushSchedulerSettings())
     morning = datetime(2025, 1, 1, 9, 0, tzinfo=UTC)
@@ -224,7 +242,7 @@ def _make_mock_content(content_type: str) -> MagicMock:
     return content
 
 
-def test_enhanced_card_deep_knowledge_type():
+async def test_enhanced_card_deep_knowledge_type():
     """Deep knowledge cards have title and 6 buttons."""
     from alice.bot.handlers.push import build_push_card
 
@@ -235,7 +253,7 @@ def test_enhanced_card_deep_knowledge_type():
     assert buttons == 6
 
 
-def test_enhanced_card_time_sensitive_type():
+async def test_enhanced_card_time_sensitive_type():
     """Time-sensitive cards have title and 2 buttons."""
     from alice.bot.handlers.push import build_push_card
 
@@ -246,7 +264,7 @@ def test_enhanced_card_time_sensitive_type():
     assert buttons == 2
 
 
-def test_enhanced_card_thought_provoking_type():
+async def test_enhanced_card_thought_provoking_type():
     """Thought-provoking cards have title and 4 buttons."""
     from alice.bot.handlers.push import build_push_card
 

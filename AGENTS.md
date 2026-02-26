@@ -181,3 +181,18 @@ cd frontend && pnpm vitest        # Run frontend tests
 - **DESIGN.md has 9 known inconsistencies** — Task 18 in the plan addresses these
 - **Content language**: Chinese (user-facing) + English (code, concept names)
 - **MVP content sources**: RSS/Atom + arXiv only (Phase 0). More connectors in Phase 1+4
+
+## TASK DECOMPOSITION / GUARDRAILS
+
+### One-Task-Per-Subagent Rule (MANDATORY)
+- **Each delegation = exactly one atomic task = one file created or modified**
+- Never ask a subagent to create or modify multiple files in a single task
+- Subagents with multi-task requests are rejected by the system prompt guard
+- This rule applies without exception — even "trivial" multi-file changes must be split
+
+### Parallel Execution Rule (MANDATORY)
+- **Independent tasks MUST run in parallel** — invoke multiple `task()` calls in one message
+- Tasks are independent when they: touch different files AND don't depend on each other's output
+- Example: Alembic migration + new service file + AGENTS.md update → all independent → run in parallel
+- Never serialize independent work — it wastes time and tokens
+- Parallelizable signals: different files, no shared state, no import dependency between them

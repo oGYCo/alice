@@ -453,3 +453,35 @@ Next: Task 5 (Content Cleaners) can use `LLMClient` protocol for formatting deci
 ### ruff Fixes Applied
 - `UP017`: Replace `timezone.utc` with `datetime.UTC` (Python 3.11+ alias) across connectors and tests.
 - `I001`: Sort imports — stdlib/third-party before local; `from __future__ import annotations` must be first; `import importlib` must not be interspersed with `from X import Y` blocks.
+
+## [2026-02-26] Task 14: Telegram Bot (aiogram + webhook + feedback handler)
+
+### aiogram v3 Webhook Pattern
+- Use `SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)` + `setup_application(app, dp, bot=bot)` for aiohttp integration
+- `DefaultBotProperties(parse_mode=ParseMode.MARKDOWN)` sets default parse mode
+- Callback query filter: `@dp.callback_query(lambda q: q.data and q.data.startswith("prefix:"))` — use lambda for inline filters
+- Run bot as standalone module: `python -m alice.bot.main` (matches docker-compose command)
+
+### Testing aiogram handlers
+- Use `AsyncMock(spec=Bot)` — never instantiate real Bot in tests (needs valid token)
+- `AsyncMock()` makes ALL attribute access return async coroutines — `session.add()` (sync in SQLAlchemy) triggers "coroutine never awaited" warning when mocked with `AsyncMock()`. This is a pytest mock quirk, not a code bug. Tests still pass.
+- Test handlers in isolation — no need to start aiohttp server. Pass mocked Bot and Message/CallbackQuery objects directly.
+- `MagicMock()` for `query.message.chat.id` is sufficient; no need for full mock tree.
+
+### Rate Limiter
+- In-memory token bucket with `asyncio.Lock()` works for single-process bot service
+- Track `user_last` timestamp dict for per-user rate limiting; `global_tokens` float for global limiting
+- `min_interval = 1.0 / per_user_rate` — second message within min_interval is blocked
+
+### Callback Data Format
+- `feedback:{FeedbackType_value}:{content_id}` — 3 parts, split on ":"
+- `parse_callback_data()` raises `ValueError` for invalid format or unknown type — use in handlers for graceful error handling
+- `_FEEDBACK_TYPE_MAP: dict[str, FeedbackType]` — explicit mapping prevents invalid StrEnum values from sneaking through
+
+### InlineKeyboardMarkup structure
+- 6 buttons in 2 rows: row1=[👍, ⏰, 📖], row2=[👎, ❓, 💬]
+- Extra buttons (❓explain, 💬discuss) use `explain:{id}` and `discuss:{id}` callback formats — separate from feedback routing
+- `sum(len(row) for row in markup.inline_keyboard)` to count total buttons in tests
+
+### ruff clean on new files
+- Pre-existing `test_source_api.py` had 11 ruff F821 errors (unrelated, not my files) — scoped ruff check to `src/alice/bot/` only for task verification

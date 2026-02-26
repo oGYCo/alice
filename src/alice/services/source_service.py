@@ -49,3 +49,37 @@ class SourceService:
 
         source.last_fetched_at = datetime.now(UTC)
         await self._session.commit()
+
+    async def update_source(self, source_id: int, **kwargs) -> Source:
+        """Update an existing source with the provided fields.
+
+        Raises ValueError if source not found.
+        """
+        result = await self._session.execute(select(Source).where(Source.id == source_id))
+        source = result.scalar_one_or_none()
+        if source is None:
+            raise ValueError(f"Source {source_id} not found")
+
+        # Map 'enabled' to the ORM field 'is_active'
+        if "enabled" in kwargs:
+            kwargs["is_active"] = kwargs.pop("enabled")
+
+        for field, value in kwargs.items():
+            setattr(source, field, value)
+
+        await self._session.commit()
+        await self._session.refresh(source)
+        return source
+
+    async def delete_source(self, source_id: int) -> None:
+        """Hard-delete a source by id.
+
+        Raises ValueError if source not found.
+        """
+        result = await self._session.execute(select(Source).where(Source.id == source_id))
+        source = result.scalar_one_or_none()
+        if source is None:
+            raise ValueError(f"Source {source_id} not found")
+
+        await self._session.delete(source)
+        await self._session.commit()

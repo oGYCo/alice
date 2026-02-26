@@ -1,4 +1,5 @@
 """Source model."""
+
 from datetime import datetime
 from enum import StrEnum
 

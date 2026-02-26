@@ -40,6 +40,7 @@ def _dispatch_next(stage: str, content_id: int) -> None:
     if task is not None:
         task.delay(content_id)
 
+
 class PipelineOrchestrator:
     """Coordinates the 4-stage content processing pipeline via PostgreSQL state."""
 
@@ -56,6 +57,7 @@ class PipelineOrchestrator:
             ValueError: If content not found or not in 'fetched' state.
         """
         from alice.pipeline.tasks import task_run_gatekeeper  # noqa: PLC0415
+
         content = await self._storage.get_by_id(content_id)
         if content is None:
             raise ValueError(f"Content {content_id} not found")

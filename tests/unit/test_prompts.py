@@ -1,6 +1,5 @@
 """Tests for Jinja2 prompt templates."""
 
-
 import jinja2
 import pytest
 

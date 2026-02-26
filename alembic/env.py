@@ -1,4 +1,5 @@
 """Alembic environment script with async engine support."""
+
 import asyncio
 import sys
 from logging.config import fileConfig
@@ -81,9 +82,6 @@ async def run_migrations_online() -> None:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
-
-
-
 
 
 if context.is_offline_mode():

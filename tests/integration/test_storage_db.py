@@ -33,7 +33,6 @@ if not TEST_DATABASE_URL:
     pytest.skip("TEST_DATABASE_URL not set — skipping integration tests", allow_module_level=True)
 
 
-
 @pytest.fixture(scope="module")
 async def engine():
     """Create async engine connected to test DB."""

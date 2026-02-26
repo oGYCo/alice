@@ -1,13 +1,13 @@
-"""Sources API router — POST /sources, GET /sources."""
+"""Sources API router — POST /sources, GET /sources, PUT /sources/{id}, DELETE /sources/{id}."""
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from alice.db import get_db
-from alice.schemas.source import SourceConfigSchema
+from alice.schemas.source import SourceConfigSchema, SourceUpdateSchema
 from alice.services.source_service import SourceService
 
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -50,3 +50,30 @@ async def list_sources(
     """List all active content sources."""
     sources = await svc.list_active()
     return sources
+
+
+@router.put("/{source_id}", response_model=SourceResponseSchema)
+async def update_source(
+    source_id: int,
+    update: SourceUpdateSchema,
+    svc: SourceService = Depends(_get_source_service),
+) -> Any:
+    """Update an existing source (partial update)."""
+    try:
+        source = await svc.update_source(source_id, **update.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return source
+
+
+@router.delete("/{source_id}", status_code=204)
+async def delete_source(
+    source_id: int,
+    svc: SourceService = Depends(_get_source_service),
+) -> Response:
+    """Delete a source by id. Returns 204 No Content."""
+    try:
+        await svc.delete_source(source_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(status_code=204)

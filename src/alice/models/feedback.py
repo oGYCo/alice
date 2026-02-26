@@ -1,4 +1,5 @@
 """Feedback model."""
+
 from enum import StrEnum
 
 from sqlalchemy import Enum, ForeignKey, Integer

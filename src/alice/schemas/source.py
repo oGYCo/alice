@@ -1,6 +1,5 @@
 """Source configuration and fetching result schemas."""
 
-
 from pydantic import BaseModel, Field
 
 
@@ -23,3 +22,13 @@ class FetchResultSchema(BaseModel):
     items_new: int
     items_skipped: int
     errors: list[str] = Field(default_factory=list)
+
+
+class SourceUpdateSchema(BaseModel):
+    """Partial update schema for a content source."""
+
+    name: str | None = None
+    url: str | None = None
+    config: dict | None = None
+    enabled: bool | None = None
+    fetch_interval_minutes: int | None = Field(default=None, ge=5, le=1440)

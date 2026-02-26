@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import importlib
+
 from fastapi import APIRouter  # type: ignore[import-not-found]
 from pydantic import BaseModel, Field  # type: ignore[import-not-found]
 
-from alice.connectors.arxiv import ArxivConnector
-from alice.connectors.rss import RSSConnector
-from alice.schemas.content import RawContentSchema
-from alice.schemas.source import SourceConfigSchema
+_rss_module = importlib.import_module("alice.connectors.rss")
+_content_module = importlib.import_module("alice.schemas.content")
+_source_module = importlib.import_module("alice.schemas.source")
+
+RSSConnector = _rss_module.RSSConnector
+RawContentSchema = _content_module.RawContentSchema
+SourceConfigSchema = _source_module.SourceConfigSchema
 
 router = APIRouter(prefix="/connectors", tags=["connectors"])
 
@@ -25,21 +30,4 @@ async def fetch_rss(request: RSSFetchRequest) -> list[RawContentSchema]:
         config={"limit": request.limit},
     )
     connector = RSSConnector()
-    return await connector.fetch(config)
-
-
-class ArxivFetchRequest(BaseModel):
-    query: str = Field(default="cat:cs.AI")
-    max_results: int = Field(default=10, ge=1, le=100)
-
-
-@router.post("/arxiv/fetch", response_model=list[RawContentSchema])
-async def fetch_arxiv(request: ArxivFetchRequest) -> list[RawContentSchema]:
-    config = SourceConfigSchema(
-        name="arxiv",
-        url=request.query,
-        type="arxiv",
-        config={"max_results": request.max_results},
-    )
-    connector = ArxivConnector()
     return await connector.fetch(config)

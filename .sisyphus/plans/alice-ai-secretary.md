@@ -1161,7 +1161,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(services): content storage + retrieval + API routes`
   - Files: `src/services/storage.py`, `src/services/source.py`, `src/api/v1/`
   - Pre-commit: `uv run pytest tests/ -v`
-- [ ] 13. Pipeline Orchestrator — State Machine + Celery Task Dispatch
+- [x] 13. Pipeline Orchestrator — State Machine + Celery Task Dispatch
 
   **What to do**:
   - Create `src/pipeline/orchestrator.py`: `PipelineOrchestrator` class:

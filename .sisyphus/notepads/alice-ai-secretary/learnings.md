@@ -420,3 +420,36 @@ Next: Task 5 (Content Cleaners) can use `LLMClient` protocol for formatting deci
 ## [2026-02-26] Task 11: Quality Scoring Service
 - Added ScoringService to render quality_score prompt, parse JSON, retry once on invalid JSON, and log scoring_complete with score + passes_threshold.
 - Added unit tests covering fixture parsing, threshold boundaries (6.0/5.9), retry success, and retry failure.
+
+## [2026-02-26] Task 9: Gatekeeper Service
+- Implemented GatekeeperService with Ollama availability check and rule-based fallback (short text, whitespace/punctuation). 
+- Uses prompt_manager to render gatekeeper prompt, parses JSON decision, logs gatekeeper_decision with structlog.
+- Tests cover LLM pass/reject and fallback behavior (unavailable/exception, short/long text).
+## [2026-02-26] Task 7: RSS Connector
+### Key Learnings
+- feedparser entries can lack usable http/https links; filter to valid schemes and skip entries with only tag: IDs.
+- URL normalization should strip tracking params (utm_*, fbclid, ref) and normalize www. to dedupe entries.
+- When trafilatura extraction fails, keep RSS summary as raw_text and mark extraction_failed with metadata error.
+
+## [2026-02-26] Pipeline Orchestrator + Celery Tasks
+
+### Celery Task Testing Pattern
+- **Never patch `asyncio`** in tests for Celery tasks that use `asyncio.run(_run())`. Patching `asyncio` and setting a `side_effect` is fragile — if the side_effect is `async def`, calling it returns a coroutine (not a result); if it's sync using `get_event_loop()`, it fails with "no current event loop" in Python 3.10+; if using `new_event_loop()`, the mocked services are NOT available in the new loop's context.
+- **Correct pattern**: Patch the *dependencies* (`AsyncSessionLocal`, `ContentStorageService`, `GatekeeperService`, etc.) directly. Let `asyncio.run(_run())` execute the real coroutine — it runs fine in sync test context (no existing event loop in `def test_...` functions).
+- `ContentStorageService` must be patched even when not explicitly constructed in the test — the task creates it internally from `session`.
+- For tasks that dispatch the next stage (`.delay()`), patch the next task too to prevent broker calls: `patch("alice.pipeline.tasks.task_run_understanding")`.
+
+### Async Context Manager Mocking
+- `AsyncSessionLocal` is used as `async with AsyncSessionLocal() as session:`. To mock it: `patch("..AsyncSessionLocal", return_value=cm)` where `cm` has `__aenter__ = AsyncMock(return_value=session)` and `__aexit__ = AsyncMock(return_value=False)`.
+- Helper `_make_session_cm()` encapsulates this pattern cleanly.
+
+### Lazy Imports in Orchestrator
+- `_dispatch_next()` uses `from alice.pipeline.tasks import task_run_X` *inside* the function body to allow `patch("alice.pipeline.tasks.task_run_X")` to intercept dispatch in tests. Top-level imports would capture a reference before the patch takes effect.
+
+### State Machine Design
+- `PipelineOrchestrator.advance_pipeline(stage, content_id)` maps stage string → next task dispatch. "gatekeeper" with `passed=False` → sets status=failed, no dispatch. "indexed" → terminal, no dispatch.
+- `mark_failed` stores structured JSON: `{"failure_reason": reason, "failed_at_stage": stage}` in `content.pipeline_error`.
+
+### ruff Fixes Applied
+- `UP017`: Replace `timezone.utc` with `datetime.UTC` (Python 3.11+ alias) across connectors and tests.
+- `I001`: Sort imports — stdlib/third-party before local; `from __future__ import annotations` must be first; `import importlib` must not be interspersed with `from X import Y` blocks.

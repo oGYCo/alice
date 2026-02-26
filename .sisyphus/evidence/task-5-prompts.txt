@@ -1,0 +1,52 @@
+Task 5: Prompt Templates Directory + Jinja2 Setup
+===================================================
+
+COMPLETION STATUS: ✓ COMPLETE
+
+Files Created:
+1. prompts/gatekeeper.j2 - Binary pass/reject classification template
+2. prompts/understanding.j2 - Content understanding extraction template
+3. prompts/quality_score.j2 - Quality scoring template
+4. prompts/push_reason.j2 - Push reason generation template
+5. src/alice/prompts.py - PromptManager class for loading/rendering templates
+6. tests/unit/test_prompts.py - 7 comprehensive template rendering tests
+
+Test Results:
+=============
+$ uv run pytest tests/unit/test_prompts.py -v
+
+============================= test session starts ==============================
+collected 7 items
+
+tests/unit/test_prompts.py::test_gatekeeper_template_renders PASSED      [ 14%]
+tests/unit/test_prompts.py::test_understanding_template_renders PASSED   [ 28%]
+tests/unit/test_prompts.py::test_understanding_template_chinese_instruction PASSED [ 42%]
+tests/unit/test_prompts.py::test_quality_score_template_renders PASSED   [ 57%]
+tests/unit/test_prompts.py::test_push_reason_template_renders PASSED     [ 71%]
+tests/unit/test_prompts.py::test_all_templates_exist PASSED              [ 85%]
+tests/unit/test_prompts.py::test_template_render_with_unknown_raises PASSED [100%]
+
+============================== 7 passed in 0.07s ===============================
+
+Linting Results:
+================
+$ uv run ruff check src/alice/prompts.py tests/unit/test_prompts.py
+All checks passed!
+
+Architecture:
+=============
+- PromptManager class uses Jinja2 with proper configuration:
+  * autoescape=False (LLM prompts are not HTML)
+  * trim_blocks=True, lstrip_blocks=True (clean whitespace)
+  * FileSystemLoader pointing to /Users/ogyco/alice/prompts/
+
+- Four convenience methods for each prompt type:
+  * render_gatekeeper() - Quality gating
+  * render_understanding() - Content analysis
+  * render_quality_score() - Scoring framework
+  * render_push_reason() - User-personalized rationale
+
+- Module-level singleton for easy import and use
+
+All templates follow design spec exactly. Ready for integration into
+pipeline tasks (Phase 1).

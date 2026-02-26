@@ -1,0 +1,18 @@
+=== PYTEST OUTPUT ===
+============================= test session starts ==============================
+platform darwin -- Python 3.14.2, pytest-9.0.2, pluggy-1.6.0 -- /Users/ogyco/alice/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/ogyco/alice
+configfile: pyproject.toml
+plugins: anyio-4.12.1, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 3 items
+
+tests/unit/test_config.py::test_config_loads_with_defaults PASSED        [ 33%]
+tests/unit/test_config.py::test_config_overrides_from_env PASSED         [ 66%]
+tests/unit/test_config.py::test_config_debug_default_false PASSED        [100%]
+
+============================== 3 passed in 0.03s ===============================
+
+=== RUFF CHECK ===
+All checks passed!

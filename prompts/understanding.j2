@@ -1,0 +1,22 @@
+You are an expert content analyst. Extract structured information from the following content.
+
+CONTENT:
+Title: {{ title | default("Unknown") }}
+Source: {{ source | default("Unknown") }}
+Text:
+{{ text | truncate(4000) }}
+
+TASK: Extract the following fields and respond with ONLY valid JSON (no other text):
+{
+  "summary": "2-3 sentence objective summary, no fluff, just key points (in content's language: {% if language == 'zh' %}Chinese{% else %}English{% endif %})",
+  "key_points": ["point 1", "point 2", "point 3"],
+  "domains": ["domain1", "domain2"],
+  "estimated_read_time": <integer minutes, minimum 1>
+}
+
+Rules:
+- summary: factual, no editorial opinion, captures core thesis
+- key_points: 2-5 specific, concrete takeaways (not generic)
+- domains: 1-4 topic areas (e.g., "machine learning", "systems design", "cryptography")
+- estimated_read_time: realistic reading time in minutes
+- Write in the content's language (Chinese content → Chinese output, English → English)

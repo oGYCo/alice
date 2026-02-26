@@ -396,7 +396,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
 #### Wave 0.1 — Infrastructure + Scaffolding
 
-- [ ] 1. Project Scaffolding + Docker Compose + Dev Tooling
+- [x] 1. Project Scaffolding + Docker Compose + Dev Tooling
 
   **What to do**:
   - Create Python project with `pyproject.toml` (dependencies: fastapi, uvicorn, celery, redis, sqlalchemy[asyncio], asyncpg, psycopg2-binary, alembic, pydantic-settings, structlog, httpx, jinja2, trafilatura, feedparser, arxiv, aiogram, openai, ollama)
@@ -486,7 +486,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `docker-compose.yml`, `Dockerfile`, `pyproject.toml`, `Makefile`, `.env.example`, `src/`, `tests/`
   - Pre-commit: `uv run ruff check . && uv run pytest tests/unit/test_config.py -v`
 
-- [ ] 2. PostgreSQL Schema + Alembic Migrations
+- [x] 2. PostgreSQL Schema + Alembic Migrations
 
   **What to do**:
   - Set up Alembic in `alembic/` with `alembic.ini` and `env.py` (async engine support)
@@ -564,7 +564,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `alembic/`, `src/models/`, `src/db.py`
   - Pre-commit: `uv run pytest tests/unit/test_models.py -v`
 
-- [ ] 3. Pydantic Models + Shared Types
+- [x] 3. Pydantic Models + Shared Types
   **What to do**:
   - Create `src/schemas/` package with Pydantic v2 models:
     - `src/schemas/content.py`: `RawContentSchema`, `ContentResponseSchema`, `ContentUnderstandingSchema` (Phase 0: summary, key_points, domains, estimated_read_time)
@@ -619,7 +619,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(core): Pydantic schemas + shared types`
   - Files: `src/schemas/`
   - Pre-commit: `uv run pytest tests/unit/test_schemas.py -v`
-- [ ] 4. LLM Abstraction Layer (LLMClient Protocol + Mock)
+- [x] 4. LLM Abstraction Layer (LLMClient Protocol + Mock)
   **What to do**:
   - Create `src/llm/` package:
     - `src/llm/protocol.py`: `LLMClient` Protocol — `async def complete(prompt, system, temperature, max_tokens, response_format) -> str`, `async def complete_structured(prompt, system, response_model: type[T]) -> T`
@@ -684,7 +684,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(core): LLM abstraction layer + mock client + fixtures`
   - Files: `src/llm/`, `tests/fixtures/llm_responses/`
   - Pre-commit: `uv run pytest tests/unit/test_llm.py -v`
-- [ ] 5. Prompt Templates Directory + Jinja2 Setup
+- [x] 5. Prompt Templates Directory + Jinja2 Setup
   **What to do**:
   - Create `prompts/` directory with Jinja2 templates:
     - `prompts/gatekeeper.j2` — Binary pass/reject based on quality criteria
@@ -739,7 +739,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(core): prompt templates + Jinja2 manager`
   - Files: `prompts/`, `src/prompts.py`
   - Pre-commit: `uv run pytest tests/unit/test_prompts.py -v`
-- [ ] 6. Celery + Redis Worker Infrastructure
+- [x] 6. Celery + Redis Worker Infrastructure
   **What to do**:
   - Create `src/worker/` package:
     - `src/worker/celery_app.py`: Celery app factory with Redis broker, task routes

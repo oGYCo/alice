@@ -1,0 +1,164 @@
+╔════════════════════════════════════════════════════════════════════╗
+║          ALICE PROJECT SCAFFOLDING - TASK 1 COMPLETE              ║
+║                       2026-02-26                                   ║
+╚════════════════════════════════════════════════════════════════════╝
+
+✓ DELIVERABLES CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Configuration Files
+  [✓] pyproject.toml - hatchling build backend, 95 dependencies, ruff/mypy/pytest config
+  [✓] docker-compose.yml - 6 services: api, bot, worker, scheduler, postgres, redis
+  [✓] docker-compose.test.yml - test environment with separate DB/Redis
+  [✓] Dockerfile - multi-stage build with uv
+  [✓] Makefile - 10 targets (up, down, test, lint, format, migrate, logs, shell, clean, help)
+  [✓] .env.example - 11 config variables with documentation
+
+Source Package (src/alice/)
+  [✓] __init__.py - package metadata
+  [✓] main.py - FastAPI app factory with /health endpoint
+  [✓] config.py - Pydantic Settings v2 with env override support
+  [✓] logging.py - Structlog JSON configuration
+
+Test Infrastructure (tests/)
+  [✓] __init__.py - test package marker
+  [✓] conftest.py - pytest fixtures for env override
+  [✓] unit/__init__.py - unit test package
+  [✓] integration/__init__.py - integration test package
+  [✓] unit/test_config.py - 3 TDD tests for config loading
+
+Testing Results
+  [✓] pytest: 3 passed in 0.03s
+  [✓] ruff check: All checks passed
+  [✓] FastAPI app loads successfully
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+VERIFICATION OUTPUTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Dependencies Installed (uv sync)
+  Total: 95 packages installed in 100ms
+  Key runtime: fastapi, uvicorn, celery, redis, sqlalchemy, asyncpg, aiogram, structlog
+  Key dev: pytest, pytest-asyncio, pytest-cov, ruff, mypy
+
+Pytest Output
+  ✓ test_config_loads_with_defaults PASSED
+  ✓ test_config_overrides_from_env PASSED
+  ✓ test_config_debug_default_false PASSED
+  → All 3 tests pass in 0.03s
+
+Ruff Results
+  Issues fixed: 5 (import sorting + unused imports)
+  Final status: All checks passed!
+
+FastAPI Verification
+  ✓ App loaded successfully
+  ✓ Title: "Alice — AI Secretary"
+  ✓ Version: "0.1.0"
+  ✓ /health endpoint ready
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FILE STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+alice/
+├── .env.example                          # Config template
+├── Dockerfile                            # Multi-stage build
+├── Makefile                              # Development commands
+├── docker-compose.yml                    # Production compose (6 services)
+├── docker-compose.test.yml               # Test compose (separate DB)
+├── pyproject.toml                        # Python project config
+├── src/
+│   └── alice/
+│       ├── __init__.py                   # Package init
+│       ├── main.py                       # FastAPI app factory
+│       ├── config.py                     # Pydantic Settings
+│       └── logging.py                    # Structlog configuration
+└── tests/
+    ├── __init__.py
+    ├── conftest.py                       # Pytest fixtures
+    ├── unit/
+    │   ├── __init__.py
+    │   └── test_config.py                # 3 config tests (TDD)
+    └── integration/
+        └── __init__.py
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+KEY ARCHITECTURE DECISIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Package Manager
+   → uv ONLY (not pip or poetry)
+   → All Python dependencies installed via uv sync
+
+2. Package Structure
+   → src/alice/ (not flat src/)
+   → Imports as: from alice.xxx import yyy
+
+3. Configuration
+   → Pydantic Settings v2
+   → Environment variable override
+   → .env loading with SettingsConfigDict
+   → Defaults for local development
+
+4. Logging
+   → Structlog with JSON output
+   → Integrated with FastAPI startup
+   → Removed basicConfig stream (was causing errors)
+
+5. Docker Compose
+   → 6 services: api, bot, worker, scheduler, postgres, redis
+   → Separate test compose (alice_test DB on port 5433)
+   → Redis with appendonly yes (persistence)
+   → Ollama runs on HOST (not in Docker)
+
+6. Testing
+   → TDD approach (tests first)
+   → pytest-asyncio for async support
+   → conftest.py with env fixtures
+   → Unit tests in tests/unit/
+
+7. Linting & Formatting
+   → ruff for fast linting
+   → mypy for type checking (deferred)
+   → All code auto-formatted and checked
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+QUICK START COMMANDS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Development
+  $ make up                    # Start all 6 Docker services
+  $ make test                  # Run all tests
+  $ make lint                  # Check code with ruff
+  $ make format                # Format code with ruff
+  $ make shell                 # Start Python REPL
+  $ make clean                 # Remove cache files
+
+Manual Testing
+  $ uv run pytest tests/unit/test_config.py -v
+  $ uv run ruff check .
+  $ uv run python -c "from alice.main import app; print(app.title)"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EVIDENCE SAVED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Location: .sisyphus/evidence/
+  ✓ task-1-dev-tooling.txt - pytest + ruff output
+  ✓ task-1-scaffold-summary.txt - this file
+
+Learnings appended to:
+  ✓ .sisyphus/notepads/alice-ai-secretary/learnings.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TASK STATUS: ✓ COMPLETE
+
+All deliverables created and verified.
+Ready for Phase 0 Task 2: Alembic migrations setup.

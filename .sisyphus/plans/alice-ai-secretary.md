@@ -1666,7 +1666,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/scoring.py`, `src/config/scoring.py`, `prompts/quality_score_7d.j2`
   - Pre-commit: `uv run pytest tests/unit/test_quality_scoring_7d.py -v`
 
-- [ ] 20. Push Priority Ranking Engine — P_score Formula
+- [x] 20. Push Priority Ranking Engine — P_score Formula
 
   **What to do**:
   - Create `src/services/ranking.py`: `RankingService`:

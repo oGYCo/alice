@@ -45,7 +45,7 @@ class PushService:
                 Content.pipeline_status == PipelineStatus.indexed,
                 Content.pushed_at.is_(None),  # type: ignore[union-attr]
             )
-            .order_by(Content.quality_score.desc())  # type: ignore[union-attr]
+            .order_by(Content.p_score.desc().nullslast(), Content.quality_score.desc())  # type: ignore[union-attr]
             .limit(limit)
         )
         return list(result.scalars().all())

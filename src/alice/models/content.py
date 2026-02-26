@@ -50,3 +50,4 @@ class Content(Base, TimestampMixin):
     domains: Mapped[list | None] = mapped_column(JSON, nullable=True)
     estimated_read_time: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pushed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    p_score: Mapped[float | None] = mapped_column(Float, nullable=True)

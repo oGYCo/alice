@@ -16,6 +16,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://alice:alice@postgres:5432/alice"
       CELERY_BROKER_URL: "redis://redis:6379/0"
       REDIS_URL: "redis://redis:6379/0"
+      MEILISEARCH_URL: "http://meilisearch:7700"
     command: ["uv", "run", "uvicorn", "alice.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -39,6 +40,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://alice:alice@postgres:5432/alice"
       CELERY_BROKER_URL: "redis://redis:6379/0"
       REDIS_URL: "redis://redis:6379/0"
+      MEILISEARCH_URL: "http://meilisearch:7700"
     command: ["uv", "run", "python", "-m", "alice.bot.main"]
 
   worker:
@@ -54,6 +56,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://alice:alice@postgres:5432/alice"
       CELERY_BROKER_URL: "redis://redis:6379/0"
       REDIS_URL: "redis://redis:6379/0"
+      MEILISEARCH_URL: "http://meilisearch:7700"
     command: ["uv", "run", "celery", "-A", "alice.worker.celery_app", "worker", "--loglevel=info"]
 
   scheduler:
@@ -69,6 +72,7 @@ services:
       DATABASE_URL: "postgresql+asyncpg://alice:alice@postgres:5432/alice"
       CELERY_BROKER_URL: "redis://redis:6379/0"
       REDIS_URL: "redis://redis:6379/0"
+      MEILISEARCH_URL: "http://meilisearch:7700"
     command: ["uv", "run", "celery", "-A", "alice.worker.celery_app", "beat", "--loglevel=info"]
 
   postgres:
@@ -104,6 +108,24 @@ services:
       retries: 10
       start_period: 5s
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    container_name: alice-meilisearch
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: "${MEILISEARCH_API_KEY:-masterKey}"
+      MEILI_ENV: "development"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   postgres_data:
   redis_data:
+  meilisearch_data:

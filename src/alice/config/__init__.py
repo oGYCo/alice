@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # Debug
     DEBUG: bool = False
 
+    # Meilisearch
+    MEILISEARCH_URL: str = "http://meilisearch:7700"
+    MEILISEARCH_API_KEY: str = "masterKey"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

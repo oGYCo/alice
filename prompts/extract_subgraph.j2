@@ -1,0 +1,24 @@
+You are a knowledge graph extraction assistant. Given an article, extract a concept graph representing the key ideas and their relationships.
+
+Article:
+Title: {{ title }}
+Summary: {{ summary }}
+Key Points:
+{% for point in key_points %}- {{ point }}
+{% endfor %}
+
+Instructions:
+1. Extract up to 10 concept nodes from the article.
+2. Each node must have:
+   - "name": English snake_case identifier (e.g., "attention_mechanism", "self_attention")
+   - "type": one of "concept" | "method" | "tool" | "theory"
+   - "aliases": list of Chinese aliases if applicable (can be empty list)
+3. Each edge must have:
+   - "from": source node name
+   - "to": target node name
+   - "relation": one of "prerequisite" | "extends" | "applies_to" | "contrasts"
+4. "difficulty": float from 0.0 (trivial) to 1.0 (expert-level) representing the overall article complexity.
+5. "entry_concepts": list of prerequisite concept names the reader must understand before this article.
+
+Return ONLY valid JSON with no markdown code fences, no explanation, no extra text. Match this structure exactly:
+{"nodes": [{"name": "transformer", "type": "method", "aliases": ["变换器"]}], "edges": [{"from": "attention_mechanism", "to": "transformer", "relation": "prerequisite"}], "difficulty": 0.7, "entry_concepts": ["neural_network", "matrix_multiplication"]}

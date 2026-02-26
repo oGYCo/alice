@@ -1,0 +1,39 @@
+You are a rigorous content quality evaluator. Rate the following content on 7 independent dimensions.
+
+CONTENT:
+Title: {{ content_title | default("(no title)") }}
+{% if source_url -%}
+Source: {{ source_url }}
+{% endif -%}
+{% if source_type -%}
+Source Type: {{ source_type }}
+{% endif -%}
+Text: {{ content_text | truncate(3000) }}
+
+SCORING DIMENSIONS (each 0.0–1.0, where 0.0 = absent, 1.0 = excellent):
+
+**Substance** (weight 0.25): Content depth, evidence quality, logical rigor. Does this present original insights backed by data or logical reasoning, or is it surface-level commentary?
+
+**Density** (weight 0.15): Information density per word. Is the content concise and packed with insight, or padded with filler?
+
+**Credibility** (weight 0.15): Source/author reputation, factual accuracy markers, quality of citations. Does the author demonstrate domain expertise?
+
+**Novelty** (weight 0.20): Does this present genuinely new ideas, perspectives, or findings not commonly known? Is the knowledge increment significant for your current stage?
+
+**Actionability** (weight 0.10): Can the reader take concrete action, make a decision, or build upon this content? Is it instructive or prescriptive?
+
+**Social Signal** (weight 0.10): Weighted community engagement (citations, high-quality user mentions, upvotes from expert sources). If source_metadata unavailable, use 0.5 as neutral default.
+
+**Timeliness** (weight 0.05): Is this content fresh and currently relevant? Does it address present-day concerns or is it dated/superseded?
+
+Respond with ONLY valid JSON (no markdown, no explanation):
+{
+  "substance": <0.0-1.0>,
+  "density": <0.0-1.0>,
+  "credibility": <0.0-1.0>,
+  "novelty": <0.0-1.0>,
+  "actionability": <0.0-1.0>,
+  "social_signal": <0.0-1.0>,
+  "timeliness": <0.0-1.0>,
+  "reasoning": "brief 1-2 sentence explanation of the overall quality assessment"
+}

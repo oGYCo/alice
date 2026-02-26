@@ -31,6 +31,8 @@ dependencies = [
     "ollama>=0.1.0",
     "meilisearch>=0.31.0",
     "neo4j>=5.0",
+    "leidenalg>=0.11.0",
+    "python-igraph>=1.0.0",
 ]
 
 [project.optional-dependencies]

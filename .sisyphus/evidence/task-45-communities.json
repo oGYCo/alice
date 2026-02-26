@@ -1,0 +1,32 @@
+[
+  {
+    "community_id": 0,
+    "concepts": [
+      "transformer",
+      "attention",
+      "bert"
+    ],
+    "avg_mastery": 0.7,
+    "label": "community_0"
+  },
+  {
+    "community_id": 1,
+    "concepts": [
+      "linux_kernel",
+      "memory_management",
+      "tcp_ip"
+    ],
+    "avg_mastery": 0.4,
+    "label": "community_1"
+  },
+  {
+    "community_id": 2,
+    "concepts": [
+      "linear_algebra",
+      "probability",
+      "calculus"
+    ],
+    "avg_mastery": 0.8,
+    "label": "community_2"
+  }
+]

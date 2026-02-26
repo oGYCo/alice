@@ -1,0 +1,12 @@
+[
+  {
+    "concept": "linear_algebra",
+    "community_id": 2,
+    "connects_communities": 2
+  },
+  {
+    "concept": "tcp_ip",
+    "community_id": 1,
+    "connects_communities": 2
+  }
+]

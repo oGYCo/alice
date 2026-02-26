@@ -25,6 +25,7 @@ Build "Alice — AI Secretary", a personal AI-powered information management sys
 ### Interview Summary
 **Key Discussions**:
 - **Tech Stack**: Python (FastAPI) backend + Next.js frontend — confirmed by user
+- **Python Tooling**: Use `uv` as the only Python package/runtime manager (`uv sync`, `uv add`, `uv run`) — confirmed by user
 - **AI Provider**: DeepSeek API as primary LLM (cost-effective, ~$0.22/1000 items) — confirmed by user
 - **Gatekeeper**: Local Qwen 1.5B/3B on RTX 4060 Laptop via Ollama — confirmed by user (NOT 7B as in original DESIGN.md)
 - **MVP Sources**: RSS/Atom + arXiv only (not 14+ connectors) — confirmed by user
@@ -76,7 +77,7 @@ Build a complete, phased AI information management system that evolves from a si
 - [ ] DeepSeek processes content into structured understanding
 - [ ] Telegram bot pushes ranked content with feedback buttons
 - [ ] Feedback updates user preferences in database
-- [ ] `pytest tests/ -v` passes with 100% on all implemented phases
+- [ ] `uv run pytest tests/ -v` passes with 100% on all implemented phases
 - [ ] Each phase has end-to-end smoke test passing
 
 ### Must Have
@@ -87,6 +88,7 @@ Build a complete, phased AI information management system that evolves from a si
 - DeepSeek API for content understanding with retry logic
 - Telegram bot (aiogram webhook) with push + feedback
 - PostgreSQL with Alembic migrations (user_id FK everywhere for future multi-tenant)
+- Python dependency/runtime managed by `uv` only (no mixed toolchains)
 - TDD: pytest for backend, vitest for frontend
 - LLM abstraction layer (LLMClient protocol + MockLLMClient for tests)
 - Structured logging via structlog
@@ -104,6 +106,7 @@ Build a complete, phased AI information management system that evolves from a si
 - ❌ Ollama inside Docker (runs on host, accessed via host.docker.internal)
 - ❌ Neo4j GDS library (use Python-side NetworkX + leidenalg instead)
 - ❌ Over-engineering: no universal query layers, no configuration frameworks, no abstract factories
+- ❌ Mixed Python environment managers (`pip`/`venv`/`poetry`/`pdm`) in project workflow
 
 ---
 
@@ -118,6 +121,11 @@ Build a complete, phased AI information management system that evolves from a si
 - **Framework**: pytest (backend), vitest (frontend)
 - **Setup**: pytest + pytest-asyncio + httpx (TestClient) for backend, vitest + @testing-library/react for frontend
 - **If TDD**: Each task follows RED (failing test) → GREEN (minimal impl) → REFACTOR
+
+### Python Tooling Policy
+- Use `uv` as the single Python entrypoint for dependency install, lock/sync, and command execution.
+- Run Python commands as `uv run <command>` (for example: `uv run pytest`, `uv run ruff`, `uv run mypy`, `uv run python`).
+- Do NOT add `requirements.txt`-driven workflows or parallel package managers.
 
 ### QA Policy
 Every task MUST include agent-executed QA scenarios (see TODO template below).
@@ -286,7 +294,7 @@ Wave 4.2 (After 4.1 — polish + export):
 Wave FINAL (After ALL tasks — independent review, 4 parallel):
 ├── Task F1: Plan compliance audit (oracle)
 ├── Task F2: Code quality review (unspecified-high)
-├── Task F3: Real manual QA (unspecified-high)
+├── Task F3: Agent-executed QA sweep (unspecified-high)
 └── Task F4: Scope fidelity check (deep)
 
 Critical Path: T1 → T2 → T7 → T9 → T13 → T17 → T19 → T20 → T24 → T27 → T28 → T32 → T40 → T51
@@ -296,67 +304,68 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
 ### Dependency Matrix
 
+> Note: This table is a high-level snapshot. For execution order, use each task's `**Blocked By**` and `**Blocks**` as the source of truth.
+
 | Task | Depends On | Blocks | Wave |
 |------|-----------|--------|------|
-| 1 | — | 2-6 | 0.1 |
-| 2 | 1 | 7,8,12,14 | 0.1 |
-| 3 | 1 | 7-12 | 0.1 |
-| 4 | 1 | 9,10,11 | 0.1 |
-| 5 | 1 | 9,10,11 | 0.1 |
-| 6 | 1 | 13,16 | 0.1 |
-| 7 | 2,3 | 13,16,49 | 0.2 |
-| 8 | 2,3 | 13,16 | 0.2 |
-| 9 | 3,4,5 | 13 | 0.2 |
-| 10 | 3,4,5 | 13,28 | 0.2 |
-| 11 | 3,4,5 | 13,19 | 0.2 |
-| 12 | 2,3 | 13,14,20-22 | 0.2 |
-| 13 | 6,7-12 | 16,17 | 0.3 |
-| 14 | 2,3,12 | 15,17,23,52,57 | 0.3 |
-| 15 | 2,14 | 17,37,44 | 0.3 |
-| 16 | 6,7,8,13 | 17 | 0.3 |
-| 17 | Phase 0 all | Phase 1 | 0.4 |
+| 1 | — | Tasks 2, 3, 4, 5, 6 | 0.1 |
+| 2 | Task 1 | Tasks 7, 8, 12, 14 | 0.1 |
+| 3 | Task 1 | Tasks 7-12 | 0.1 |
+| 4 | Task 1 | Tasks 9, 10, 11 | 0.1 |
+| 5 | Task 1 | Tasks 9, 10, 11 | 0.1 |
+| 6 | Task 1 | Tasks 13, 16 | 0.1 |
+| 7 | Tasks 2, 3 | Tasks 13, 16, 49 | 0.2 |
+| 8 | Tasks 2, 3 | Tasks 13, 16 | 0.2 |
+| 9 | Tasks 3, 4, 5 | Task 13 | 0.2 |
+| 10 | Tasks 3, 4, 5 | Task 13, 28 | 0.2 |
+| 11 | Tasks 3, 4, 5 | Task 13, 19 | 0.2 |
+| 12 | Tasks 2, 3 | Tasks 13, 14, 20-22 | 0.2 |
+| 13 | Tasks 6, 9, 10, 11, 12 | Tasks 17, 20, 24 | 0.3 |
+| 14 | Tasks 1, 3, 6 | Tasks 16, 23, 57 | 0.3 |
+| 15 | Tasks 1, 6, 12 | Tasks 17, 24 | 0.3 |
+| 16 | Tasks 12, 14, 15 | Tasks 20, 23, 24 | 0.3 |
+| 17 | Tasks 13, 14, 15, 16 | Tasks 19-26 (Phase 1) | 0.4 |
 | 18 | — | — | 0.4 |
-| 19 | 11 | 26 | 1.1 |
-| 20 | 12 | 24,26,51 | 1.1 |
-| 21 | 12 | 25,26,33 | 1.1 |
-| 22 | 12 | 26 | 1.1 |
-| 23 | 14 | 26 | 1.1 |
-| 24 | 20 | 26 | 1.2 |
-| 25 | 21 | 26 | 1.2 |
-| 26 | 19-25 | Phase 2 | 1.2 |
-| 27 | Phase 1 | 28,31,33,37,45 | 2.1 |
-| 28 | 10,27 | 32,38,43 | 2.1 |
-| 29 | Phase 1 | 30 | 2.1 |
-| 30 | 29 | 34-36,46,47,53,55 | 2.1 |
-| 31 | 27 | 32,37,41,42,45 | 2.1 |
-| 32 | 28,31 | 38,51 | 2.2 |
-| 33 | 27,21 | 38,43,52 | 2.2 |
-| 34 | 30 | 39 | 2.2 |
-| 35 | 30 | 39,54 | 2.2 |
-| 36 | 30 | 39 | 2.2 |
-| 37 | 31,15 | 38,40,44 | 2.2 |
-| 38 | 32-37 | Phase 3 | 2.3 |
-| 39 | 34-36 | Phase 3 | 2.3 |
-| 40 | 37 | 47,48,57 | 3.1 |
-| 41 | 31 | 47,48 | 3.1 |
-| 42 | 31 | 48 | 3.1 |
-| 43 | 28,33 | 46,48 | 3.1 |
-| 44 | 15,37 | 48 | 3.1 |
-| 45 | 27,31 | 48 | 3.2 |
-| 46 | 43,30 | 48 | 3.2 |
-| 47 | 40,41,30 | 48 | 3.2 |
-| 48 | 40-47 | Phase 4 | 3.2 |
-| 49 | 7 | 50,58 | 4.1 |
-| 50 | 49 | 58 | 4.1 |
-| 51 | 20,32 | 58 | 4.1 |
-| 52 | 33,14 | 58 | 4.1 |
-| 53 | 31,30 | 58 | 4.1 |
-| 54 | 35 | 58 | 4.2 |
-| 55 | 30 | 58 | 4.2 |
-| 56 | all | 58 | 4.2 |
-| 57 | 40,14 | 58 | 4.2 |
-| 58 | 49-57 | FINAL | 4.2 |
-
+| 19 | Tasks 11, 17 | Tasks 20, 32 | 1.1 |
+| 20 | Tasks 11, 16, 17 | Tasks 24, 32, 51 | 1.1 |
+| 21 | Tasks 12, 17 | Tasks 25, 33 | 1.1 |
+| 22 | Tasks 12, 17 | Task 26 | 1.1 |
+| 23 | Tasks 14, 16, 19 | Task 26 | 1.1 |
+| 24 | Tasks 15, 16, 20 | Task 26, 42 | 1.2 |
+| 25 | Tasks 21, 22 | Task 26 | 1.2 |
+| 26 | Tasks 19-25 | Phase 2 tasks (T27+) | 1.2 |
+| 27 | Tasks 17, 26 (Phase 1 complete) | Tasks 28, 31, 32, 33, 37, 45 | 2.1 |
+| 28 | Tasks 27, 4 (LLM client), 10 (understanding output) | Tasks 32, 33, 37 | 2.1 |
+| 29 | Tasks 26 (Phase 1 complete) | Tasks 30, 34, 35, 36 | 2.1 |
+| 30 | Task 29 | Tasks 34, 35, 36 | 2.1 |
+| 31 | Task 27 | Tasks 32, 37, 40, 42, 45 | 2.1 |
+| 32 | Tasks 27, 28, 31, 19 | Tasks 38, 42, 51 | 2.2 |
+| 33 | Tasks 27 (Neo4j schema), 21 (Meilisearch), 13 (content processing pipeline) | Tasks 37, 38 (KG update needs query engine; integration tests need all components) | 2.2 |
+| 34 | Tasks 29 (Next.js scaffolding), 30 (layout shell) | Task 39 (frontend tests) | 2.2 |
+| 35 | Tasks 29 (Next.js scaffolding), 30 (layout shell), 10 (AI analysis generation) | Task 39 (frontend tests) | 2.2 |
+| 36 | Task 30, Task 15, Task 24 | Task 39 | 2.2 |
+| 37 | Tasks 24, 33, 28 | Task 38 | 2.2 |
+| 38 | Tasks 33-37 | — | 2.3 |
+| 39 | Tasks 34, 35, 36 | — | 2.3 |
+| 40 | Task 2 (DB schema/models), Task 15 (Celery Beat scheduling) | Task 48 (Phase 3 tests), Task 57 (Telegram reminders) | 3.1 |
+| 41 | Task 2 (DB schema/models), Task 20 (push ranker uses memory context) | Task 48 | 3.1 |
+| 42 | Task 14 (Telegram bot commands), Task 20 (push ranker) | Task 48 | 3.1 |
+| 43 | Tasks 37 (KG updates provide data), 40 (FSRS provides review stats), 41 (memory provides context) | Task 48 | 3.1 |
+| 44 | Task 37 (KGUpdater to refactor) | Task 48 | 3.1 |
+| 45 | Task 27 (Neo4j schema), Task 37 (KG has data) | Task 48 | 3.2 |
+| 46 | Task 43 (reports must exist), Task 29 (Next.js foundation) | Task 48 | 3.2 |
+| 47 | Tasks 40 (FSRS data), 41 (memory data), 45 (community data), 26 (Next.js) | Task 48 | 3.2 |
+| 48 | Tasks 40-47 | — | 3.2 |
+| 49 | Task 7 (existing connector base), Task 13 (Phase 0 pipeline), Task 27 (Neo4j integration) | Task 50 (needs framework v2), Task 55 (admin panel needs connector list), Task 58 (final E2E) | 4.1 |
+| 50 | Task 49 (connector framework v2 must exist first) | Task 55 (admin panel), Task 58 (final E2E) | 4.1 |
+| 51 | Task 20 (push ranker), Task 27 (Neo4j KG for graph traversal), Task 45 (community detection for cross-domain identification) | Task 55 (admin panel shows exploration stats), Task 58 (final E2E) | 4.1 |
+| 52 | Task 14 (Telegram feedback handler), Task 27 (KG service for concept lookup), Task 28 (content subgraph for concept extraction) | Task 55 (admin shows dialog stats), Task 58 (final E2E) | 4.1 |
+| 53 | Task 30 (Next.js dashboard shell), Task 27 (Neo4j KG service), Task 45 (community detection) | Task 58 (final E2E) | 4.1 |
+| 54 | Task 30 (dashboard shell for frontend buttons), Task 43 (report generation for report export), Task 28 (content subgraph for mermaid diagrams) | Task 58 (final E2E) | 4.2 |
+| 55 | Task 30 (dashboard shell), Task 49 (connector list API), Task 13 (pipeline for monitoring), Task 20 (ranker for match audit) | Task 58 (final E2E) | 4.2 |
+| 56 | ALL Phase 1-3 and Wave 4.1-4.2 tasks (optimize what exists) | Task 58 (final E2E should test optimized system) | 4.2 |
+| 57 | Task 40 (FSRS implementation), Task 14 (Telegram bot feedback handlers), Task 24 (push schedule/time windows) | Task 58 (final E2E includes review flow) | 4.2 |
+| 58 | ALL Tasks 49-57 | Final Verification Wave | 4.2 |
 ### Agent Dispatch Summary
 
 - **0.1**: **6 tasks** — T1-T6 → `quick`
@@ -391,10 +400,11 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **What to do**:
   - Create Python project with `pyproject.toml` (dependencies: fastapi, uvicorn, celery, redis, sqlalchemy[asyncio], asyncpg, psycopg2-binary, alembic, pydantic-settings, structlog, httpx, jinja2, trafilatura, feedparser, arxiv, aiogram, openai, ollama)
+  - Initialize Python environment management with `uv` (`uv sync`, `uv add ...`, `uv run ...`)
   - Create `docker-compose.yml` with 6 services: `api` (FastAPI:8000), `bot` (aiogram:8081), `worker` (Celery), `scheduler` (Celery Beat), `postgres` (5432), `redis` (6379, appendonly=yes)
   - Create `docker-compose.test.yml` for integration tests (separate DB)
   - Create `Dockerfile` with multi-stage build (builder + runtime)
-  - Create `Makefile` with targets: `up`, `down`, `test`, `lint`, `migrate`, `logs`, `shell`
+  - Create `Makefile` with targets: `up`, `down`, `test`, `lint`, `migrate`, `logs`, `shell` (Python targets call `uv run ...`)
   - Create `.env.example` with all config vars (DB URLs, API keys, Ollama host)
   - Create `src/` package structure: `src/__init__.py`, `src/main.py` (FastAPI app factory), `src/config.py` (Pydantic Settings)
   - Set up `structlog` with JSON output in `src/logging.py`
@@ -440,9 +450,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] Test file created: `tests/unit/test_config.py`
-  - [ ] `pytest tests/unit/test_config.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_config.py -v` → PASS
 
-  **QA Scenarios**:
+  **QA Scenarios:**
 
   ```
   Scenario: Docker Compose starts all services healthy
@@ -464,8 +474,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
     Preconditions: Project scaffolded
     Steps:
       1. Run `make lint` — assert ruff exits 0
-      2. Run `make test` — assert pytest discovers tests and exits 0
-      3. Verify config loads: `python -c "from src.config import settings; print(settings.DATABASE_URL)"`
+      2. Run `make test` — assert `uv run pytest` discovers tests and exits 0
+      3. Verify config loads: `uv run python -c "from src.config import settings; print(settings.DATABASE_URL)"`
     Expected Result: All dev tools functional
     Failure Indicators: Import errors, missing dependencies
     Evidence: .sisyphus/evidence/task-1-dev-tooling.txt
@@ -474,7 +484,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `chore(infra): scaffold project + Docker Compose + dev tooling`
   - Files: `docker-compose.yml`, `Dockerfile`, `pyproject.toml`, `Makefile`, `.env.example`, `src/`, `tests/`
-  - Pre-commit: `ruff check . && pytest tests/unit/test_config.py -v`
+  - Pre-commit: `uv run ruff check . && uv run pytest tests/unit/test_config.py -v`
 
 - [ ] 2. PostgreSQL Schema + Alembic Migrations
 
@@ -521,9 +531,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] Test file created: `tests/unit/test_models.py`
-  - [ ] `pytest tests/unit/test_models.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_models.py -v` → PASS
 
-  **QA Scenarios**:
+  **QA Scenarios:**
 
   ```
   Scenario: Alembic migration applies cleanly
@@ -552,10 +562,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(db): PostgreSQL schema + Alembic migrations`
   - Files: `alembic/`, `src/models/`, `src/db.py`
-  - Pre-commit: `pytest tests/unit/test_models.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_models.py -v`
 
 - [ ] 3. Pydantic Models + Shared Types
-,
   **What to do**:
   - Create `src/schemas/` package with Pydantic v2 models:
     - `src/schemas/content.py`: `RawContentSchema`, `ContentResponseSchema`, `ContentUnderstandingSchema` (Phase 0: summary, key_points, domains, estimated_read_time)
@@ -591,9 +600,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] Test file: `tests/unit/test_schemas.py`
-  - [ ] `pytest tests/unit/test_schemas.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_schemas.py -v` → PASS
 
-  **QA Scenarios**:
+  **QA Scenarios:**
 
   ```
   Scenario: Schema validation rejects invalid data
@@ -609,10 +618,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES (groups with T4, T5)
   - Message: `feat(core): Pydantic schemas + shared types`
   - Files: `src/schemas/`
-  - Pre-commit: `pytest tests/unit/test_schemas.py -v`
-,
+  - Pre-commit: `uv run pytest tests/unit/test_schemas.py -v`
 - [ ] 4. LLM Abstraction Layer (LLMClient Protocol + Mock)
-,
   **What to do**:
   - Create `src/llm/` package:
     - `src/llm/protocol.py`: `LLMClient` Protocol — `async def complete(prompt, system, temperature, max_tokens, response_format) -> str`, `async def complete_structured(prompt, system, response_model: type[T]) -> T`
@@ -652,9 +659,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] Test file: `tests/unit/test_llm.py`
-  - [ ] `pytest tests/unit/test_llm.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_llm.py -v` → PASS
 
-  **QA Scenarios**:
+  **QA Scenarios:**
 
   ```
   Scenario: Mock client returns fixture data
@@ -664,7 +671,6 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
       2. Assert structured output parses into Pydantic model
     Expected Result: Mock client fully functional
     Evidence: .sisyphus/evidence/task-4-mock-client.txt
-,
   Scenario: DeepSeek error handling
     Tool: Bash
     Steps:
@@ -677,10 +683,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES (groups with T3, T5)
   - Message: `feat(core): LLM abstraction layer + mock client + fixtures`
   - Files: `src/llm/`, `tests/fixtures/llm_responses/`
-  - Pre-commit: `pytest tests/unit/test_llm.py -v`
-,
+  - Pre-commit: `uv run pytest tests/unit/test_llm.py -v`
 - [ ] 5. Prompt Templates Directory + Jinja2 Setup
-,
   **What to do**:
   - Create `prompts/` directory with Jinja2 templates:
     - `prompts/gatekeeper.j2` — Binary pass/reject based on quality criteria
@@ -717,9 +721,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] Test file: `tests/unit/test_prompts.py`
-  - [ ] `pytest tests/unit/test_prompts.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_prompts.py -v` → PASS
 
-  **QA Scenarios**:
+  **QA Scenarios:**
 
   ```
   Scenario: All templates render without errors
@@ -731,14 +735,11 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
     Expected Result: All 4 templates render correctly
     Evidence: .sisyphus/evidence/task-5-templates.txt
   ```
-,
   **Commit**: YES (groups with T3, T4)
   - Message: `feat(core): prompt templates + Jinja2 manager`
   - Files: `prompts/`, `src/prompts.py`
-  - Pre-commit: `pytest tests/unit/test_prompts.py -v`
-,
+  - Pre-commit: `uv run pytest tests/unit/test_prompts.py -v`
 - [ ] 6. Celery + Redis Worker Infrastructure
-,
   **What to do**:
   - Create `src/worker/` package:
     - `src/worker/celery_app.py`: Celery app factory with Redis broker, task routes
@@ -777,9 +778,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] Test file: `tests/unit/test_worker.py`
-  - [ ] `pytest tests/unit/test_worker.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_worker.py -v` → PASS
 
-  **QA Scenarios**:
+  **QA Scenarios:**
 
   ```
   Scenario: Worker starts and discovers tasks
@@ -802,7 +803,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(worker): Celery + Redis infrastructure + task stubs`
   - Files: `src/worker/`
-  - Pre-commit: `pytest tests/unit/test_worker.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_worker.py -v`
 #### Wave 0.2 — Connectors + Gatekeeper (MAX PARALLEL after Wave 0.1)
 
 - [ ] 7. RSS/Atom Connector with Full-Text Extraction
@@ -847,7 +848,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `tests/unit/test_rss_connector.py`
-  - [ ] `pytest tests/unit/test_rss_connector.py -v` → PASS (parse fixture XML, extract fields, handle errors)
+  - [ ] `uv run pytest tests/unit/test_rss_connector.py -v` → PASS (parse fixture XML, extract fields, handle errors)
   **QA Scenarios:**
   ```
   Scenario: RSS connector fetches real HN feed
@@ -875,7 +876,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(connectors): RSS/Atom connector with trafilatura full-text extraction`
   - Files: `src/connectors/`, `tests/fixtures/rss_feeds/`
-  - Pre-commit: `pytest tests/unit/test_rss_connector.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_rss_connector.py -v`
 
 - [ ] 8. arXiv Connector
   **What to do**:
@@ -909,7 +910,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `tests/unit/test_arxiv_connector.py`
-  - [ ] `pytest tests/unit/test_arxiv_connector.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_arxiv_connector.py -v` → PASS
   **QA Scenarios:**
   ```
   Scenario: arXiv connector fetches real papers
@@ -931,7 +932,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(connectors): arXiv connector with category search`
   - Files: `src/connectors/arxiv.py`, `tests/fixtures/arxiv_responses/`
-  - Pre-commit: `pytest tests/unit/test_arxiv_connector.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_arxiv_connector.py -v`
 - [ ] 9. Gatekeeper Service — Ollama + Rule-Based Fallback
   **What to do**:
   - Create `src/services/gatekeeper.py`: `GatekeeperService`:
@@ -967,7 +968,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `tests/unit/test_gatekeeper.py`
-  - [ ] `pytest tests/unit/test_gatekeeper.py -v` → PASS (mock Ollama pass, mock Ollama reject, fallback path)
+  - [ ] `uv run pytest tests/unit/test_gatekeeper.py -v` → PASS (mock Ollama pass, mock Ollama reject, fallback path)
   **QA Scenarios:**
   ```
   Scenario: Gatekeeper passes quality content via mock LLM
@@ -992,7 +993,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(services): gatekeeper with Ollama + rule-based fallback`
   - Files: `src/services/gatekeeper.py`
-  - Pre-commit: `pytest tests/unit/test_gatekeeper.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_gatekeeper.py -v`
 - [ ] 10. Content Understanding Service — DeepSeek
   **What to do**:
   - Create `src/services/understanding.py`: `UnderstandingService`:
@@ -1025,7 +1026,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `tests/unit/test_understanding.py`
-  - [ ] `pytest tests/unit/test_understanding.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_understanding.py -v` → PASS
   **QA Scenarios:**
   ```
   Scenario: Understanding extracts structured data from content
@@ -1047,7 +1048,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(services): content understanding via DeepSeek`
   - Files: `src/services/understanding.py`
-  - Pre-commit: `pytest tests/unit/test_understanding.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_understanding.py -v`
 - [ ] 11. Quality Scoring — Simple LLM Score
   **What to do**:
   - Create `src/services/scoring.py`: `ScoringService`:
@@ -1078,7 +1079,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `tests/unit/test_scoring.py`
-  - [ ] `pytest tests/unit/test_scoring.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_scoring.py -v` → PASS
   **QA Scenarios:**
   ```
   Scenario: Scoring returns valid score with reasoning
@@ -1093,7 +1094,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(services): simple LLM quality scoring (1-10)`
   - Files: `src/services/scoring.py`
-  - Pre-commit: `pytest tests/unit/test_scoring.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_scoring.py -v`
 - [ ] 12. Content Storage + Retrieval Service
   **What to do**:
   - Create `src/services/storage.py`: `ContentStorageService`:
@@ -1133,8 +1134,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `tests/unit/test_storage.py`, `tests/integration/test_storage_db.py`
-  - [ ] `pytest tests/unit/test_storage.py -v` → PASS
-  - [ ] `pytest tests/integration/test_storage_db.py -v` → PASS (requires test DB)
+  - [ ] `uv run pytest tests/unit/test_storage.py -v` → PASS
+  - [ ] `uv run pytest tests/integration/test_storage_db.py -v` → PASS (requires test DB)
   **QA Scenarios:**
   ```
   Scenario: Content CRUD lifecycle
@@ -1159,7 +1160,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(services): content storage + retrieval + API routes`
   - Files: `src/services/storage.py`, `src/services/source.py`, `src/api/v1/`
-  - Pre-commit: `pytest tests/ -v`
+  - Pre-commit: `uv run pytest tests/ -v`
 - [ ] 13. Pipeline Orchestrator — State Machine + Celery Task Dispatch
 
   **What to do**:
@@ -1212,8 +1213,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_orchestrator.py`, `tests/unit/test_pipeline_tasks.py`
-  - [ ] `pytest tests/unit/test_orchestrator.py -v` → PASS
-  - [ ] `pytest tests/unit/test_pipeline_tasks.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_orchestrator.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_pipeline_tasks.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1241,7 +1242,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(pipeline): orchestrator state machine + Celery task dispatch`
   - Files: `src/pipeline/orchestrator.py`, `src/pipeline/tasks.py`, `src/pipeline/scheduler.py`
-  - Pre-commit: `pytest tests/unit/test_orchestrator.py tests/unit/test_pipeline_tasks.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_orchestrator.py tests/unit/test_pipeline_tasks.py -v`
 
 - [ ] 14. Telegram Bot — aiogram + Feedback Handler
 
@@ -1292,8 +1293,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_bot_handlers.py`, `tests/unit/test_bot_feedback.py`
-  - [ ] `pytest tests/unit/test_bot_handlers.py -v` → PASS
-  - [ ] `pytest tests/unit/test_bot_feedback.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_bot_handlers.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_bot_feedback.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1320,7 +1321,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(bot): Telegram bot with aiogram + webhook + feedback handler`
   - Files: `src/bot/main.py`, `src/bot/handlers/`
-  - Pre-commit: `pytest tests/unit/test_bot_handlers.py tests/unit/test_bot_feedback.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_bot_handlers.py tests/unit/test_bot_feedback.py -v`
 
 - [ ] 15. Celery Beat Scheduling + Source Management API
 
@@ -1360,7 +1361,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_source_api.py`, `tests/unit/test_scheduler.py`
-  - [ ] `pytest tests/unit/test_source_api.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_source_api.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1387,7 +1388,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(api): source management + pipeline control + Celery Beat`
   - Files: `src/api/v1/sources.py`, `src/api/v1/pipeline.py`, `src/pipeline/scheduler.py`
-  - Pre-commit: `pytest tests/unit/test_source_api.py tests/unit/test_scheduler.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_source_api.py tests/unit/test_scheduler.py -v`
 
 - [ ] 16. Telegram Push Service — Content Delivery
 
@@ -1428,7 +1429,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_push_service.py`
-  - [ ] `pytest tests/unit/test_push_service.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_push_service.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1455,7 +1456,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(push): Telegram push service + card templates + batch delivery`
   - Files: `src/services/push.py`, `prompts/push_card.j2`
-  - Pre-commit: `pytest tests/unit/test_push_service.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_push_service.py -v`
 
 - [ ] 17. Phase 0 Integration Tests + E2E Smoke Test
 
@@ -1500,7 +1501,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/integration/test_phase0_e2e.py`
-  - [ ] `pytest tests/integration/ -v` → ALL PASS
+  - [ ] `uv run pytest tests/integration/ -v` → ALL PASS
 
   **QA Scenarios:**
 
@@ -1531,7 +1532,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `test(e2e): Phase 0 integration tests + smoke test script`
   - Files: `tests/integration/`, `scripts/smoke_test.sh`
-  - Pre-commit: `pytest tests/ -v`
+  - Pre-commit: `uv run pytest tests/ -v`
 
 - [ ] 18. Update DESIGN.md — Fix 9 Identified Inconsistencies
 
@@ -1635,7 +1636,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_quality_scoring_7d.py`
-  - [ ] `pytest tests/unit/test_quality_scoring_7d.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_quality_scoring_7d.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1663,7 +1664,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(scoring): 7-dimension quality scoring formula`
   - Files: `src/services/scoring.py`, `src/config/scoring.py`, `prompts/quality_score_7d.j2`
-  - Pre-commit: `pytest tests/unit/test_quality_scoring_7d.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_quality_scoring_7d.py -v`
 
 - [ ] 20. Push Priority Ranking Engine — P_score Formula
 
@@ -1705,7 +1706,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_ranking.py`
-  - [ ] `pytest tests/unit/test_ranking.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_ranking.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1733,7 +1734,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(ranking): push priority ranking engine with P_score formula`
   - Files: `src/services/ranking.py`, `src/services/push.py`
-  - Pre-commit: `pytest tests/unit/test_ranking.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_ranking.py -v`
 
 - [ ] 21. Meilisearch Integration + Full-Text Indexing
 
@@ -1774,7 +1775,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_search_service.py`
-  - [ ] `pytest tests/unit/test_search_service.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_search_service.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1801,7 +1802,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(search): Meilisearch integration + full-text indexing`
   - Files: `src/services/search.py`, `docker-compose.yml`
-  - Pre-commit: `pytest tests/unit/test_search_service.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_search_service.py -v`
 
 - [ ] 22. Content Deduplication — URL Normalization + SimHash
 
@@ -1840,7 +1841,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_dedup.py`
-  - [ ] `pytest tests/unit/test_dedup.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_dedup.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1867,7 +1868,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(dedup): URL normalization + SimHash near-duplicate detection`
   - Files: `src/services/dedup.py`, `src/utils/url.py`
-  - Pre-commit: `pytest tests/unit/test_dedup.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_dedup.py -v`
 
 - [ ] 23. Enhanced Telegram Card Formatting
 
@@ -1907,7 +1908,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_card_formatting.py`
-  - [ ] `pytest tests/unit/test_card_formatting.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_card_formatting.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -1935,7 +1936,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(bot): enhanced Telegram card formatting for 3 content types`
   - Files: `src/bot/handlers/push.py`, `prompts/push_card.j2`
-  - Pre-commit: `pytest tests/unit/test_card_formatting.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_card_formatting.py -v`
 
 - [ ] 24. Time-Window Push Scheduling
 
@@ -1978,7 +1979,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_push_scheduler.py`
-  - [ ] `pytest tests/unit/test_push_scheduler.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_push_scheduler.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -2005,7 +2006,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(push): time-window scheduling + user push preferences`
   - Files: `src/services/scheduler.py`, `src/api/v1/settings.py`
-  - Pre-commit: `pytest tests/unit/test_push_scheduler.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_push_scheduler.py -v`
 
 - [ ] 25. Search API Endpoints
 
@@ -2041,7 +2042,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_search_api.py`
-  - [ ] `pytest tests/unit/test_search_api.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_search_api.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -2059,7 +2060,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES (groups with T21)
   - Message: `feat(api): search endpoints with pagination + facets`
   - Files: `src/api/v1/search.py`
-  - Pre-commit: `pytest tests/unit/test_search_api.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_search_api.py -v`
 
 - [ ] 26. Phase 1 Integration Tests
 
@@ -2097,7 +2098,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/integration/test_phase1_e2e.py`
-  - [ ] `pytest tests/integration/test_phase1_e2e.py -v` → ALL PASS
+  - [ ] `uv run pytest tests/integration/test_phase1_e2e.py -v` → ALL PASS
 
   **QA Scenarios:**
 
@@ -2117,7 +2118,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `test(e2e): Phase 1 integration tests`
   - Files: `tests/integration/test_phase1_e2e.py`
-  - Pre-commit: `pytest tests/ -v`
+  - Pre-commit: `uv run pytest tests/ -v`
 
 ---
 
@@ -2168,8 +2169,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_graph_client.py`, `tests/integration/test_neo4j.py`
-  - [ ] `pytest tests/unit/test_graph_client.py -v` → PASS
-  - [ ] `pytest tests/integration/test_neo4j.py -v` → PASS (requires Neo4j)
+  - [ ] `uv run pytest tests/unit/test_graph_client.py -v` → PASS
+  - [ ] `uv run pytest tests/integration/test_neo4j.py -v` → PASS (requires Neo4j)
 
   **QA Scenarios:**
 
@@ -2197,7 +2198,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(graph): Neo4j setup + schema + Python driver`
   - Files: `src/graph/`, `docker-compose.yml`
-  - Pre-commit: `pytest tests/unit/test_graph_client.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_graph_client.py -v`
 
 - [ ] 28. Content Subgraph Generation via LLM
 
@@ -2241,7 +2242,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_subgraph_extractor.py`
-  - [ ] `pytest tests/unit/test_subgraph_extractor.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_subgraph_extractor.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -2270,7 +2271,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(graph): content subgraph generation via LLM`
   - Files: `src/graph/extractor.py`, `prompts/extract_subgraph.j2`
-  - Pre-commit: `pytest tests/unit/test_subgraph_extractor.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_subgraph_extractor.py -v`
 
 - [ ] 29. Next.js Project Scaffolding + API Client
 
@@ -2451,7 +2452,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_user_kg.py`
-  - [ ] `pytest tests/unit/test_user_kg.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_user_kg.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -2470,7 +2471,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(graph): user knowledge graph model + API`
   - Files: `src/graph/user_kg.py`, `src/api/v1/knowledge.py`
-  - Pre-commit: `pytest tests/unit/test_user_kg.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_user_kg.py -v`
 
 - [ ] 32. Content-User Matching Algorithm
 
@@ -2515,7 +2516,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **TDD:**
   - [ ] `tests/unit/test_matching.py`
-  - [ ] `pytest tests/unit/test_matching.py -v` → PASS
+  - [ ] `uv run pytest tests/unit/test_matching.py -v` → PASS
 
   **QA Scenarios:**
 
@@ -2544,7 +2545,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(matching): content-user matching algorithm + R_relevance`
   - Files: `src/services/matching.py`
-  - Pre-commit: `pytest tests/unit/test_matching.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_matching.py -v`
 
 - [ ] 33. GraphRAG Hybrid Query Engine
 
@@ -2590,11 +2591,11 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **References**:
   **Pattern References**:
-  - `src/services/llm_client.py` — LLMClient protocol for query rewriting calls (Task 4)
-  - `src/services/content_processor.py` — How content is processed and embeddings generated (Task 13)
+  - `src/llm/protocol.py` — LLMClient protocol for query rewriting calls (Task 4)
+  - `src/pipeline/tasks.py` — How content is processed across stages and transformed for retrieval (Task 13)
   - `src/models/content.py` — Content model with embedding field (Task 3)
-  - `src/services/neo4j_client.py` — Neo4j connection and Cypher execution (Task 27)
-  - `src/services/meilisearch_client.py` — Meilisearch query API (Task 21)
+  - `src/graph/client.py` — Neo4j connection and Cypher execution (Task 27)
+  - `src/services/search.py` — Meilisearch query API (Task 21)
   **External References**:
   - DESIGN.md:625-660 — GraphRAG query flow and storage architecture diagram
   - DESIGN.md:364-373 — Match score formula and thresholds for subgraph matching
@@ -2606,7 +2607,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file created: `tests/unit/test_graphrag_query.py`
-  - [ ] `pytest tests/unit/test_graphrag_query.py -v` → PASS (8+ tests, 0 failures)
+  - [ ] `uv run pytest tests/unit/test_graphrag_query.py -v` → PASS (8+ tests, 0 failures)
   - [ ] Tests cover: graph search, text search, semantic search, merging, deduplication, fallback
 
   **QA Scenarios:**
@@ -2640,7 +2641,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(graphrag): hybrid query engine with graph+text+semantic fusion`
   - Files: `src/services/graphrag_query.py`, `tests/unit/test_graphrag_query.py`
-  - Pre-commit: `pytest tests/unit/test_graphrag_query.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_graphrag_query.py -v`
 
 - [ ] 34. Feed View Page — Card List with Grid/List Toggle
 
@@ -2689,7 +2690,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - `Folo/packages/internal/components/ui/` — Reusable UI primitives (buttons, badges, skeletons)
   - `frontend/src/app/layout.tsx` — Next.js app shell from Task 30
   **API/Type References**:
-  - `src/api/routes/push.py` — Feed API endpoint returning paginated content (Task 12)
+  - `src/api/v1/content.py` — Feed API endpoint returning paginated content (Task 12)
   - `src/models/content.py:ContentResponse` — Response DTO shape for content cards
   **External References**:
   - DESIGN.md:938-942 — Core interaction constraints (every parsed content appears in card flow)
@@ -2701,7 +2702,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `frontend/src/components/feed/__tests__/ContentCard.test.tsx`
-  - [ ] `npx vitest run src/components/feed` → PASS (5+ tests, 0 failures)
+  - [ ] `cd frontend && npx vitest run src/components/feed` → PASS (5+ tests, 0 failures)
 
   **QA Scenarios:**
   ```
@@ -2749,7 +2750,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(frontend): feed page with content cards, grid/list toggle`
   - Files: `frontend/src/app/feed/page.tsx`, `frontend/src/components/feed/ContentCard.tsx`, `frontend/src/components/feed/FeedHeader.tsx`, `frontend/src/components/feed/FeedSkeleton.tsx`
-  - Pre-commit: `npx vitest run src/components/feed`
+  - Pre-commit: `cd frontend && npx vitest run src/components/feed`
 
 - [ ] 35. Content Detail Page + Reading View
 
@@ -2811,7 +2812,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] Test file: `frontend/src/components/content/__tests__/ContentDetail.test.tsx`
-  - [ ] `npx vitest run src/components/content` → PASS (5+ tests)
+  - [ ] `cd frontend && npx vitest run src/components/content` → PASS (5+ tests)
 
   **QA Scenarios:**
   ```
@@ -2846,7 +2847,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(frontend): content detail with AI analysis, subgraph, and reading view`
   - Files: `frontend/src/app/content/[id]/page.tsx`, `frontend/src/components/content/AIAnalysis.tsx`, `frontend/src/components/content/ContentSubgraph.tsx`, `frontend/src/components/content/OriginalContent.tsx`, `frontend/src/components/content/FeedbackBar.tsx`
-  - Pre-commit: `npx vitest run src/components/content`
+  - Pre-commit: `cd frontend && npx vitest run src/components/content`
 
 - [ ] 36. Settings Page — Sources, Preferences, Schedule
 
@@ -2880,13 +2881,13 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **References**:
   - `frontend/src/app/layout.tsx` — Navigation structure (Task 30)
-  - `src/api/routes/sources.py` — Source CRUD (Task 15)
+  - `src/api/v1/sources.py` — Source CRUD (Task 15)
   - DESIGN.md:780-783 — ε presets (保守 0.03, 平衡 0.08, 探索 0.20)
   - DESIGN.md:797-835 — Push schedule YAML
   - DESIGN.md:375-396 — User state machine modes
 
   **Acceptance Criteria**:
-  **TDD:** `npx vitest run src/components/settings` → PASS (5+ tests)
+  **TDD:** `cd frontend && npx vitest run src/components/settings` → PASS (5+ tests)
   **QA Scenarios:**
   ```
   Scenario: Add RSS source
@@ -2910,7 +2911,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(frontend): settings page with sources, preferences, schedule`
   - Files: `frontend/src/app/settings/page.tsx`, `frontend/src/components/settings/*.tsx`
-  - Pre-commit: `npx vitest run src/components/settings`
+  - Pre-commit: `cd frontend && npx vitest run src/components/settings`
 
 - [ ] 37. Knowledge Graph Update on User Feedback
 
@@ -2943,14 +2944,14 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - **Blocked By**: Tasks 24, 33, 28
 
   **References**:
-  - `src/services/content_processor.py` — LLM call patterns (Task 23)
-  - `src/services/neo4j_client.py` — Cypher execution (Task 27)
+  - `src/services/understanding.py` — LLM call patterns for structured extraction (Task 10)
+  - `src/graph/client.py` — Cypher execution (Task 27)
   - DESIGN.md:674-683 — Feedback types table
   - DESIGN.md:685-732 — Skill system YAML
   - DESIGN.md:661-669 — KG auto-maintenance rules
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/unit/test_kg_updater.py -v` → PASS (10+ tests)
+  **TDD:** `uv run pytest tests/unit/test_kg_updater.py -v` → PASS (10+ tests)
   **QA Scenarios:**
   ```
   Scenario: Positive feedback boosts mastery
@@ -2973,7 +2974,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(feedback): KG update with skill dispatch`
   - Files: `src/services/kg_updater.py`, `tests/unit/test_kg_updater.py`
-  - Pre-commit: `pytest tests/unit/test_kg_updater.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_kg_updater.py -v`
 
 - [ ] 38. Phase 2 Integration Tests
 
@@ -3006,18 +3007,18 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - `docker-compose.test.yml` — Test env (Task 3)
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/integration/ -v --timeout=120` → PASS (15+ tests)
+  **TDD:** `uv run pytest tests/integration/ -v --timeout=120` → PASS (15+ tests)
   **QA Scenarios:**
   ```
   Scenario: Full pipeline
     Tool: Bash (pytest)
-    Steps: pytest tests/integration/test_phase2_integration.py -v
+    Steps: uv run pytest tests/integration/test_phase2_integration.py -v
     Expected: 15+ tests pass
     Evidence: .sisyphus/evidence/task-38-integration.txt
 
   Scenario: Feedback affects queries
     Tool: Bash (pytest)
-    Steps: pytest tests/integration/test_phase2_integration.py::test_feedback_loop -v
+    Steps: uv run pytest tests/integration/test_phase2_integration.py::test_feedback_loop -v
     Expected: Ranking changes after feedback
     Evidence: .sisyphus/evidence/task-38-feedback-loop.txt
   ```
@@ -3025,7 +3026,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `test(phase2): integration tests for pipeline, feedback, Telegram`
   - Files: `tests/integration/test_phase2_*.py`, `tests/integration/test_telegram_flow.py`
-  - Pre-commit: `pytest tests/integration/ -v --timeout=120`
+  - Pre-commit: `uv run pytest tests/integration/ -v --timeout=120`
 
 - [ ] 39. Frontend Tests — Vitest + Playwright E2E
 
@@ -3058,7 +3059,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Acceptance Criteria**:
   **TDD:**
   - [ ] `npx vitest run` → PASS (15+ component tests)
-  - [ ] `npx playwright test` → PASS (6+ E2E tests)
+  - [ ] `cd frontend && npx playwright test` → PASS (6+ E2E tests)
   **QA Scenarios:**
   ```
   Scenario: Vitest pass
@@ -3077,7 +3078,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `test(frontend): vitest + Playwright E2E for Phase 2`
   - Files: `frontend/src/components/**/__tests__/*.test.tsx`, `frontend/e2e/*.spec.ts`
-  - Pre-commit: `npx vitest run && npx playwright test`
+  - Pre-commit: `cd frontend && npx vitest run && npx playwright test`
 
 ---
 
@@ -3129,7 +3130,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Open source: `py-fsrs` library for reference implementation (MIT license)
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/unit/test_fsrs_engine.py -v` → PASS (12+ tests)
+  **TDD:** `uv run pytest tests/unit/test_fsrs_engine.py -v` → PASS (12+ tests)
   **QA Scenarios:**
   ```
   Scenario: Schedule review after positive rating
@@ -3156,7 +3157,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(fsrs): spaced repetition engine with FSRS v5 algorithm`
   - Files: `src/services/fsrs_engine.py`, `src/models/review_card.py`, `tests/unit/test_fsrs_engine.py`
-  - Pre-commit: `pytest tests/unit/test_fsrs_engine.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_fsrs_engine.py -v`
 
 - [ ] 41. 3-Tier Memory System (Working / Short-term / Long-term)
 
@@ -3205,7 +3206,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - `src/services/push_scorer.py` — R_relevance formula integration point (Task 31)
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/unit/test_memory_system.py -v` → PASS (10+ tests)
+  **TDD:** `uv run pytest tests/unit/test_memory_system.py -v` → PASS (10+ tests)
   **QA Scenarios:**
   ```
   Scenario: Working memory declaration boosts related content
@@ -3231,7 +3232,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(memory): 3-tier memory system with working/short/long-term layers`
   - Files: `src/services/memory_system.py`, `src/models/user_memory.py`, `tests/unit/test_memory_system.py`
-  - Pre-commit: `pytest tests/unit/test_memory_system.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_memory_system.py -v`
 
 - [ ] 42. User State Machine (日常/项目攻关/探索/低能量)
 
@@ -3282,7 +3283,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - `src/bot/handlers.py` — Telegram command handlers (Task 28)
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/unit/test_user_state.py -v` → PASS (8+ tests)
+  **TDD:** `uv run pytest tests/unit/test_user_state.py -v` → PASS (8+ tests)
   **QA Scenarios:**
   ```
   Scenario: Enter Project mode boosts related content
@@ -3307,7 +3308,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(state): user mode state machine with 4 modes and auto-transitions`
   - Files: `src/services/user_state.py`, `tests/unit/test_user_state.py`
-  - Pre-commit: `pytest tests/unit/test_user_state.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_user_state.py -v`
 
 #### Wave 3.2 — Reports + Dashboard + Integration
 
@@ -3349,11 +3350,11 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **References**:
   - DESIGN.md:963-1001 — Report structure, weekly report example, topic aggregation
-  - `src/services/llm_client.py` — LLM calls for synthesis (Task 9)
+  - `src/llm/deepseek.py` — LLM client implementation for synthesis calls (Task 4)
   - `prompts/` directory — Jinja2 templates (Task 10)
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/unit/test_report_generator.py -v` → PASS (8+ tests)
+  **TDD:** `uv run pytest tests/unit/test_report_generator.py -v` → PASS (8+ tests)
   **QA Scenarios:**
   ```
   Scenario: Weekly report generated with correct structure
@@ -3381,7 +3382,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(reports): auto weekly report generation with LLM synthesis + PDF`
   - Files: `src/services/report_generator.py`, `tests/unit/test_report_generator.py`, `prompts/weekly_report.j2`
-  - Pre-commit: `pytest tests/unit/test_report_generator.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_report_generator.py -v`
 
 - [ ] 44. Advanced Feedback Skill System
 
@@ -3425,7 +3426,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - `src/services/kg_updater.py` — Existing update logic to refactor (Task 37)
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/unit/test_skill_executor.py -v` → PASS (8+ tests)
+  **TDD:** `uv run pytest tests/unit/test_skill_executor.py -v` → PASS (8+ tests)
   **QA Scenarios:**
   ```
   Scenario: Skill dispatch on feedback
@@ -3451,7 +3452,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(skills): advanced feedback skill system with registry and periodic review`
   - Files: `src/services/skill_executor.py`, `config/skills.yaml`, `tests/unit/test_skill_executor.py`
-  - Pre-commit: `pytest tests/unit/test_skill_executor.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_skill_executor.py -v`
 
 - [ ] 45. Leiden Community Detection (NetworkX + leidenalg)
 
@@ -3491,12 +3492,12 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - **Blocked By**: Task 27 (Neo4j schema), Task 37 (KG has data)
 
   **References**:
-  - `src/services/neo4j_client.py` — Export graph data (Task 27)
+  - `src/graph/client.py` — Export graph data (Task 27)
   - DESIGN.md:771-775 — Cross-domain bridge pushing and neighborhood exploration
   - `leidenalg` docs: RBConfigurationVertexPartition, resolution parameter
 
   **Acceptance Criteria**:
-  **TDD:** `pytest tests/unit/test_community_detection.py -v` → PASS (6+ tests)
+  **TDD:** `uv run pytest tests/unit/test_community_detection.py -v` → PASS (6+ tests)
   **QA Scenarios:**
   ```
   Scenario: Detect communities in test KG
@@ -3521,7 +3522,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(graph): Leiden community detection with bridge and gap analysis`
   - Files: `src/services/community_detection.py`, `tests/unit/test_community_detection.py`
-  - Pre-commit: `pytest tests/unit/test_community_detection.py -v`
+  - Pre-commit: `uv run pytest tests/unit/test_community_detection.py -v`
 
 - [ ] 46. Report UI Page + PDF Export
 
@@ -3558,7 +3559,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - `frontend/src/components/feed/ContentCard.tsx` — Card layout patterns (Task 34)
 
   **Acceptance Criteria**:
-  **TDD:** `npx vitest run src/components/reports` → PASS (4+ tests)
+  **TDD:** `cd frontend && npx vitest run src/components/reports` → PASS (4+ tests)
   **QA Scenarios:**
   ```
   Scenario: View weekly report
@@ -3576,7 +3577,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(frontend): report listing and viewer with PDF download`
   - Files: `frontend/src/app/reports/page.tsx`, `frontend/src/app/reports/[id]/page.tsx`, `frontend/src/components/reports/*.tsx`
-  - Pre-commit: `npx vitest run src/components/reports`
+  - Pre-commit: `cd frontend && npx vitest run src/components/reports`
 
 - [ ] 47. Cognitive Dashboard — Learning Progress
 
@@ -3616,7 +3617,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - `src/services/fsrs_engine.py` — Review schedule data (Task 40)
 
   **Acceptance Criteria**:
-  **TDD:** `npx vitest run src/components/dashboard` → PASS (5+ tests)
+  **TDD:** `cd frontend && npx vitest run src/components/dashboard` → PASS (5+ tests)
   **QA Scenarios:**
   ```
   Scenario: Dashboard loads with all widgets
@@ -3635,7 +3636,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(frontend): cognitive dashboard with learning metrics and charts`
   - Files: `frontend/src/app/dashboard/page.tsx`, `frontend/src/components/dashboard/*.tsx`
-  - Pre-commit: `npx vitest run src/components/dashboard`
+  - Pre-commit: `cd frontend && npx vitest run src/components/dashboard`
 
 - [ ] 48. Phase 3 Integration Tests
 
@@ -3671,13 +3672,13 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Acceptance Criteria**:
   **TDD:**
-  - [ ] `pytest tests/integration/test_phase3_integration.py -v` → PASS (12+ tests)
-  - [ ] `npx playwright test e2e/dashboard.spec.ts e2e/reports.spec.ts` → PASS (4+ tests)
+  - [ ] `uv run pytest tests/integration/test_phase3_integration.py -v` → PASS (12+ tests)
+  - [ ] `cd frontend && npx playwright test e2e/dashboard.spec.ts e2e/reports.spec.ts` → PASS (4+ tests)
   **QA Scenarios:**
   ```
   Scenario: FSRS + memory + state integration
     Tool: Bash (pytest)
-    Steps: pytest tests/integration/test_phase3_integration.py -v --timeout=180
+    Steps: uv run pytest tests/integration/test_phase3_integration.py -v --timeout=180
     Expected: 12+ integration tests pass
     Evidence: .sisyphus/evidence/task-48-integration.txt
 
@@ -3691,7 +3692,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `test(phase3): integration tests for FSRS, memory, state, reports, communities`
   - Files: `tests/integration/test_phase3_integration.py`, `frontend/e2e/dashboard.spec.ts`, `frontend/e2e/reports.spec.ts`
-  - Pre-commit: `pytest tests/integration/test_phase3_integration.py -v && npx playwright test`
+  - Pre-commit: `uv run pytest tests/integration/test_phase3_integration.py -v && cd frontend && npx playwright test`
 
 ### Phase 4 — Full Vision
 
@@ -3739,14 +3740,14 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **References**:
 
   **Pattern References** (existing code to follow):
-  - `backend/app/connectors/base.py` — Current connector base class from Task 7, extend this
-  - `backend/app/connectors/rss.py` — RSS connector pattern (fetch→parse→normalize), replicate for new connectors
-  - `backend/app/connectors/arxiv.py` — arXiv connector pattern, similar structure for API-based connectors
-  - `backend/app/services/pipeline.py` — Pipeline service that connectors feed into
+  - `src/connectors/base.py` — Current connector base class from Task 7, extend this
+  - `src/connectors/rss.py` — RSS connector pattern (fetch→parse→normalize), replicate for new connectors
+  - `src/connectors/arxiv.py` — arXiv connector pattern, similar structure for API-based connectors
+  - `src/services/pipeline.py` — Pipeline service that connectors feed into
 
   **API/Type References**:
-  - `backend/app/models/content.py:RawContent` — The model all connectors must produce
-  - `backend/app/schemas/connector.py` — Connector config schema (create/extend)
+  - `src/models/content.py:RawContent` — The model all connectors must produce
+  - `src/schemas/connector.py` — Connector config schema (create/extend)
 
   **External References**:
   - X API v2 docs: https://developer.x.com/en/docs/x-api
@@ -3765,7 +3766,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/connectors/test_github_connector.py` — Mock GitHub API (5+ tests)
   - [ ] `tests/unit/connectors/test_youtube_connector.py` — Mock yt-dlp + transcripts (5+ tests)
   - [ ] `tests/unit/connectors/test_hn_connector.py` — Mock HN Algolia (5+ tests)
-  - [ ] `pytest tests/unit/connectors/ -v` → PASS (33+ tests, 0 failures)
+  - [ ] `uv run pytest tests/unit/connectors/ -v` → PASS (33+ tests, 0 failures)
 
   **QA Scenarios:**
 
@@ -3774,7 +3775,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
     Tool: Bash (curl)
     Preconditions: API running, all 5 new + 2 existing connectors registered
     Steps:
-      1. curl -s http://localhost:8000/api/connectors | python -m json.tool
+      1. curl -s http://localhost:8000/api/connectors | uv run python -m json.tool
       2. Assert response is JSON array with length >= 7
       3. Assert each item has fields: name, status, last_fetch, item_count, error_count
       4. Assert "x", "reddit", "github_stars", "youtube", "hackernews" all present in names
@@ -3809,8 +3810,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `feat(connectors): add connector framework v2 with X, Reddit, GitHub, YouTube, HN connectors`
-  - Files: `backend/app/connectors/`, `backend/app/schemas/connector.py`, `tests/unit/connectors/`
-  - Pre-commit: `pytest tests/unit/connectors/ -v`
+  - Files: `src/connectors/`, `src/schemas/connector.py`, `tests/unit/connectors/`
+  - Pre-commit: `uv run pytest tests/unit/connectors/ -v`
 
 - [ ] 50. Connector Batch 2 — Chinese Platforms + Podcast (微信公众号, 知乎, 小红书, Bilibili, Podcast RSS)
 
@@ -3848,9 +3849,9 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **References**:
 
   **Pattern References**:
-  - `backend/app/connectors/base.py` — Connector v2 base class (from Task 49)
-  - `backend/app/connectors/rss.py` — RSS pattern, reuse for podcast connector
-  - `backend/app/connectors/youtube.py` — YouTube transcript pattern (from Task 49), similar for Bilibili
+  - `src/connectors/base.py` — Connector v2 base class (from Task 49)
+  - `src/connectors/rss.py` — RSS pattern, reuse for podcast connector
+  - `src/connectors/youtube.py` — YouTube transcript pattern (from Task 49), similar for Bilibili
 
   **External References**:
   - bilibili-api-python: https://github.com/Nemo2011/bilibili-api
@@ -3866,7 +3867,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/connectors/test_xiaohongshu_connector.py` — Mock responses, test graceful degradation (3+ tests)
   - [ ] `tests/unit/connectors/test_bilibili_connector.py` — Mock API + transcript (4+ tests)
   - [ ] `tests/unit/connectors/test_podcast_connector.py` — Mock RSS + Whisper transcription (5+ tests)
-  - [ ] `pytest tests/unit/connectors/test_{wechat,zhihu,xiaohongshu,bilibili,podcast}_connector.py -v` → PASS (20+ tests, 0 failures)
+  - [ ] `uv run pytest tests/unit/connectors/test_{wechat,zhihu,xiaohongshu,bilibili,podcast}_connector.py -v` → PASS (20+ tests, 0 failures)
 
   **QA Scenarios:**
 
@@ -3875,7 +3876,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
     Tool: Bash (curl)
     Preconditions: API running with all connectors registered
     Steps:
-      1. curl -s http://localhost:8000/api/connectors | python -m json.tool
+      1. curl -s http://localhost:8000/api/connectors | uv run python -m json.tool
       2. Assert response contains 12 connectors (rss, arxiv, x, reddit, github_stars, youtube, hackernews, wechat, zhihu, xiaohongshu, bilibili, podcast)
       3. For each: assert has name, status, config_schema fields
     Expected Result: 200 OK, 12 connectors listed
@@ -3909,8 +3910,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `feat(connectors): add WeChat, Zhihu, Xiaohongshu, Bilibili, Podcast connectors`
-  - Files: `backend/app/connectors/`, `tests/unit/connectors/`
-  - Pre-commit: `pytest tests/unit/connectors/ -v`
+  - Files: `src/connectors/`, `tests/unit/connectors/`
+  - Pre-commit: `uv run pytest tests/unit/connectors/ -v`
 
 - [ ] 51. ε-Greedy Exploration Mechanism + Cross-Domain Bridging
 
@@ -3954,14 +3955,14 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **References**:
 
   **Pattern References**:
-  - `backend/app/services/ranker.py` — Push ranker from Task 20, add ε-sampling layer here
-  - `backend/app/services/kg_service.py` — KG service from Task 27, use for neighbor queries
-  - `backend/app/services/community.py` — Community detection from Task 45, use for cross-domain identification
-  - `backend/app/bot/handlers/commands.py` — Existing bot commands, add `/explore` and `/explore_mode`
+  - `src/services/ranker.py` — Push ranker from Task 20, add ε-sampling layer here
+  - `src/services/kg_service.py` — KG service from Task 27, use for neighbor queries
+  - `src/services/community.py` — Community detection from Task 45, use for cross-domain identification
+  - `src/bot/handlers/commands.py` — Existing bot commands, add `/explore` and `/explore_mode`
 
   **API/Type References**:
-  - `backend/app/models/push.py:PushRecord` — Add `is_exploration` boolean field
-  - `backend/app/models/user.py:UserPreferences` — Add `exploration_epsilon` field
+  - `src/models/push.py:PushRecord` — Add `is_exploration` boolean field
+  - `src/models/user.py:UserPreferences` — Add `exploration_epsilon` field
 
   **External References**:
   - DESIGN.md:754-789 — ε-greedy exploration strategy specification
@@ -3973,7 +3974,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/test_exploration.py` — ε-sampling logic, quality floor, exploration pool selection (8+ tests)
   - [ ] `tests/unit/test_bridge_detection.py` — Cross-domain bridge detection from KG (5+ tests)
   - [ ] `tests/unit/test_exploration_commands.py` — Telegram /explore and /explore_mode (4+ tests)
-  - [ ] `pytest tests/unit/test_exploration*.py tests/unit/test_bridge*.py -v` → PASS (17+ tests)
+  - [ ] `uv run pytest tests/unit/test_exploration*.py tests/unit/test_bridge*.py -v` → PASS (17+ tests)
 
   **QA Scenarios:**
 
@@ -4016,8 +4017,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `feat(exploration): implement ε-greedy exploration with cross-domain bridging`
-  - Files: `backend/app/services/exploration.py`, `backend/app/services/ranker.py`, `backend/app/bot/handlers/`, `prompts/exploration_bridge.j2`, `tests/unit/test_exploration*.py`
-  - Pre-commit: `pytest tests/unit/test_exploration*.py tests/unit/test_bridge*.py -v`
+  - Files: `src/services/exploration.py`, `src/services/ranker.py`, `src/bot/handlers/`, `prompts/exploration_bridge.j2`, `tests/unit/test_exploration*.py`
+  - Pre-commit: `uv run pytest tests/unit/test_exploration*.py tests/unit/test_bridge*.py -v`
 
 - [ ] 52. "Explain Concept" QA Dialog Flow + Free-form Follow-up
 
@@ -4070,14 +4071,14 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **References**:
 
   **Pattern References**:
-  - `backend/app/bot/handlers/feedback.py` — Existing feedback handlers from Task 14, extend with explain/follow-up
-  - `backend/app/services/llm_client.py` — LLM client protocol from Task 4, use for dialog responses
-  - `backend/app/services/kg_service.py` — KG queries for user mastery and concept neighborhoods
+  - `src/bot/handlers/feedback.py` — Existing feedback handlers from Task 14, extend with explain/follow-up
+  - `src/llm/protocol.py` — LLM client protocol from Task 4, use for dialog responses
+  - `src/services/kg_service.py` — KG queries for user mastery and concept neighborhoods
   - `prompts/` — Existing Jinja2 templates, follow same pattern
 
   **API/Type References**:
-  - `backend/app/models/push.py:PushRecord` — Foreign key for dialog sessions
-  - `backend/app/models/content.py:ContentSubgraph` — Source of extractable concepts
+  - `src/models/push.py:PushRecord` — Foreign key for dialog sessions
+  - `src/models/content.py:ContentSubgraph` — Source of extractable concepts
   - DESIGN.md:879-885 — Concept selector UX flow specification
   - DESIGN.md:682 — Feedback table row for "❓ Explain Concept"
 
@@ -4087,7 +4088,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/test_concept_explain.py` — Concept extraction, explanation generation, mastery update (8+ tests)
   - [ ] `tests/unit/test_dialog_session.py` — Session lifecycle, message storage, auto-close (6+ tests)
   - [ ] `tests/unit/test_dialog_api.py` — API endpoints for dialog start/message/history (5+ tests)
-  - [ ] `pytest tests/unit/test_concept*.py tests/unit/test_dialog*.py -v` → PASS (19+ tests)
+  - [ ] `uv run pytest tests/unit/test_concept*.py tests/unit/test_dialog*.py -v` → PASS (19+ tests)
 
   **QA Scenarios:**
 
@@ -4138,8 +4139,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `feat(dialog): implement concept explanation QA and free-form follow-up dialog`
-  - Files: `backend/app/services/dialog.py`, `backend/app/services/concept_explain.py`, `backend/app/models/dialog.py`, `backend/app/api/dialog.py`, `backend/app/bot/handlers/feedback.py`, `prompts/explain_concept.j2`, `tests/unit/test_concept*.py`, `tests/unit/test_dialog*.py`
-  - Pre-commit: `pytest tests/unit/test_concept*.py tests/unit/test_dialog*.py -v`
+  - Files: `src/services/dialog.py`, `src/services/concept_explain.py`, `src/models/dialog.py`, `src/api/dialog.py`, `src/bot/handlers/feedback.py`, `prompts/explain_concept.j2`, `tests/unit/test_concept*.py`, `tests/unit/test_dialog*.py`
+  - Pre-commit: `uv run pytest tests/unit/test_concept*.py tests/unit/test_dialog*.py -v`
 
 #### Wave 4.2 — Frontend Advanced + Export (Tasks 53-55)
 
@@ -4205,8 +4206,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Folo reference: `Folo/packages/internal/components/ui/` — Component patterns for reference
 
   **API/Type References**:
-  - `backend/app/api/kg.py` — KG API endpoints from Task 27
-  - `backend/app/schemas/kg.py` — Graph node/edge schemas
+  - `src/api/kg.py` — KG API endpoints from Task 27
+  - `src/schemas/kg.py` — Graph node/edge schemas
   - DESIGN.md:899-904 — Knowledge graph page information architecture
 
   **External References**:
@@ -4219,7 +4220,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `frontend/src/__tests__/components/KnowledgeGraph.test.tsx` — Graph rendering, filtering, search (6+ tests)
   - [ ] `frontend/src/__tests__/components/GraphControls.test.tsx` — Zoom, layout toggle, filter (4+ tests)
   - [ ] `frontend/src/__tests__/components/GraphEditor.test.tsx` — Node edit, edge management (4+ tests)
-  - [ ] `npx vitest run src/__tests__/components/KnowledgeGraph* src/__tests__/components/Graph*` → PASS (14+ tests)
+  - [ ] `cd frontend && npx vitest run src/__tests__/components/KnowledgeGraph* src/__tests__/components/Graph*` → PASS (14+ tests)
 
   **QA Scenarios:**
 
@@ -4270,7 +4271,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `feat(frontend): add interactive knowledge graph visualization with React Flow`
   - Files: `frontend/src/app/dashboard/knowledge-graph/`, `frontend/src/components/graph/`, `frontend/src/__tests__/components/`
-  - Pre-commit: `npx vitest run && npx playwright test`
+  - Pre-commit: `cd frontend && npx vitest run && npx playwright test`
 
 - [ ] 54. Content Export — Markdown + PDF Generation
 
@@ -4318,13 +4319,13 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **References**:
 
   **Pattern References**:
-  - `backend/app/services/report.py` — Report generation from Task 43, extend with export formats
+  - `src/services/report.py` — Report generation from Task 43, extend with export formats
   - `prompts/` — Existing Jinja2 templates, follow same pattern for export templates
   - `frontend/src/components/content/ContentCard.tsx` — Add export buttons to existing card component
 
   **API/Type References**:
-  - `backend/app/models/content.py:Content` — Content model with subgraph data
-  - `backend/app/models/report.py:Report` — Report model from Task 43
+  - `src/models/content.py:Content` — Content model with subgraph data
+  - `src/models/report.py:Report` — Report model from Task 43
   - DESIGN.md:912-916 — Library page with export functionality
   - DESIGN.md:993-1001 — Topic aggregation report specification
 
@@ -4338,7 +4339,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/test_export.py` — Markdown generation, PDF conversion, bulk export (8+ tests)
   - [ ] `tests/unit/test_topic_aggregation.py` — Topic clustering, LLM aggregation (5+ tests)
   - [ ] `frontend/src/__tests__/components/ExportButton.test.tsx` — Export button rendering (3+ tests)
-  - [ ] `pytest tests/unit/test_export*.py tests/unit/test_topic*.py -v` → PASS (13+ tests)
+  - [ ] `uv run pytest tests/unit/test_export*.py tests/unit/test_topic*.py -v` → PASS (13+ tests)
 
   **QA Scenarios:**
 
@@ -4384,8 +4385,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `feat(export): add Markdown and PDF export for content, topics, and reports`
-  - Files: `backend/app/services/export.py`, `backend/app/api/export.py`, `templates/export_*.md.j2`, `frontend/src/components/content/ExportButton.tsx`, `tests/`
-  - Pre-commit: `pytest tests/unit/test_export*.py tests/unit/test_topic*.py -v && npx vitest run`
+  - Files: `src/services/export.py`, `src/api/export.py`, `templates/export_*.md.j2`, `frontend/src/components/content/ExportButton.tsx`, `tests/`
+  - Pre-commit: `uv run pytest tests/unit/test_export*.py tests/unit/test_topic*.py -v && npx vitest run`
 
 - [ ] 55. Admin Panel + Analytics Dashboard
 
@@ -4457,7 +4458,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **API/Type References**:
   - DESIGN.md:925-935 — Admin panel information architecture
   - DESIGN.md:906-910 — Data insights page specification
-  - `backend/app/api/` — Existing API structure, add admin/ and analytics/ routers
+  - `src/api/` — Existing API structure, add admin/ and analytics/ routers
 
   **External References**:
   - Recharts docs: https://recharts.org/en-US/guide
@@ -4471,7 +4472,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/test_analytics_api.py` — Reading stats, growth, accuracy endpoints (6+ tests)
   - [ ] `frontend/src/__tests__/pages/Admin.test.tsx` — Connector table, pipeline view rendering (5+ tests)
   - [ ] `frontend/src/__tests__/pages/Analytics.test.tsx` — Charts rendering with mock data (4+ tests)
-  - [ ] `pytest tests/unit/test_admin*.py tests/unit/test_analytics*.py -v && npx vitest run` → PASS (23+ tests)
+  - [ ] `uv run pytest tests/unit/test_admin*.py tests/unit/test_analytics*.py -v && npx vitest run` → PASS (23+ tests)
 
   **QA Scenarios:**
 
@@ -4521,8 +4522,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `feat(admin): add admin panel with connector management, pipeline monitor, analytics dashboard`
-  - Files: `frontend/src/app/dashboard/admin/`, `frontend/src/app/dashboard/analytics/`, `backend/app/api/admin.py`, `backend/app/api/analytics.py`, `tests/`
-  - Pre-commit: `pytest tests/unit/test_admin*.py tests/unit/test_analytics*.py -v && npx vitest run`
+  - Files: `frontend/src/app/dashboard/admin/`, `frontend/src/app/dashboard/analytics/`, `src/api/admin.py`, `src/api/analytics.py`, `tests/`
+  - Pre-commit: `uv run pytest tests/unit/test_admin*.py tests/unit/test_analytics*.py -v && npx vitest run`
 
 #### Wave 4.3 — Polish + Final Integration (Tasks 56-58)
 
@@ -4579,13 +4580,13 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **References**:
 
   **Pattern References**:
-  - `backend/app/core/config.py` — Redis configuration, add cache settings
-  - `backend/app/services/` — All services that need caching applied
-  - `backend/app/models/` — All models that need index optimization
+  - `src/core/config.py` — Redis configuration, add cache settings
+  - `src/services/` — All services that need caching applied
+  - `src/models/` — All models that need index optimization
 
   **API/Type References**:
   - DESIGN.md:1059-1067 — Cost optimization strategy table
-  - `backend/app/core/database.py` — Database connection setup, add pooling config
+  - `src/core/database.py` — Database connection setup, add pooling config
 
   **External References**:
   - Redis caching patterns: https://redis.io/docs/manual/patterns/
@@ -4598,7 +4599,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/test_cache.py` — Cache decorator, invalidation, TTL expiry (8+ tests)
   - [ ] `tests/unit/test_llm_dedup.py` — Content similarity dedup, batch calls (5+ tests)
   - [ ] `tests/unit/test_token_tracking.py` — Token usage logging and reporting (4+ tests)
-  - [ ] `pytest tests/unit/test_cache*.py tests/unit/test_llm_dedup*.py tests/unit/test_token*.py -v` → PASS (17+ tests)
+  - [ ] `uv run pytest tests/unit/test_cache*.py tests/unit/test_llm_dedup*.py tests/unit/test_token*.py -v` → PASS (17+ tests)
 
   **QA Scenarios:**
 
@@ -4645,8 +4646,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `perf: add Redis caching, DB indexes, LLM dedup, Celery priority queues`
-  - Files: `backend/app/core/cache.py`, `backend/app/core/database.py`, `backend/app/services/`, `backend/alembic/versions/`, `tests/`
-  - Pre-commit: `pytest tests/unit/test_cache*.py tests/unit/test_llm*.py tests/unit/test_token*.py -v`
+  - Files: `src/core/cache.py`, `src/core/database.py`, `src/services/`, `alembic/versions/`, `tests/`
+  - Pre-commit: `uv run pytest tests/unit/test_cache*.py tests/unit/test_llm*.py tests/unit/test_token*.py -v`
 
 - [ ] 57. Spaced Repetition Reminders via Telegram (FSRS)
 
@@ -4701,14 +4702,14 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **References**:
 
   **Pattern References**:
-  - `backend/app/services/fsrs.py` — FSRS algorithm from Task 40, use for scheduling and rating updates
-  - `backend/app/services/push_scheduler.py` — Push scheduler from Task 24, add review push type
-  - `backend/app/bot/handlers/feedback.py` — Feedback handlers, extend with review rating buttons
+  - `src/services/fsrs.py` — FSRS algorithm from Task 40, use for scheduling and rating updates
+  - `src/services/push_scheduler.py` — Push scheduler from Task 24, add review push type
+  - `src/bot/handlers/feedback.py` — Feedback handlers, extend with review rating buttons
   - `prompts/` — Existing Jinja2 templates
 
   **API/Type References**:
-  - `backend/app/models/fsrs.py:FSRSCard` — FSRS card model from Task 40
-  - `backend/app/models/push.py:PushRecord` — Add push_type field ("content" | "review")
+  - `src/models/fsrs.py:FSRSCard` — FSRS card model from Task 40
+  - `src/models/push.py:PushRecord` — Add push_type field ("content" | "review")
   - DESIGN.md:1013-1037 — Cognitive retention system specification
   - DESIGN.md:1027-1031 — Review push format (3 modes)
 
@@ -4723,7 +4724,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/unit/test_review_push.py` — Three review modes generation, template rendering (6+ tests)
   - [ ] `tests/unit/test_review_interaction.py` — Rating mapping, FSRS update, internalization (6+ tests)
   - [ ] `tests/unit/test_review_commands.py` — /review and /review_stats Telegram commands (4+ tests)
-  - [ ] `pytest tests/unit/test_review*.py -v` → PASS (24+ tests)
+  - [ ] `uv run pytest tests/unit/test_review*.py -v` → PASS (24+ tests)
 
   **QA Scenarios:**
 
@@ -4770,8 +4771,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
   **Commit**: YES
   - Message: `feat(review): implement spaced repetition reminders with FSRS and 3 review modes`
-  - Files: `backend/app/services/review.py`, `backend/app/tasks/review.py`, `backend/app/bot/handlers/review.py`, `prompts/review_*.j2`, `tests/unit/test_review*.py`
-  - Pre-commit: `pytest tests/unit/test_review*.py -v`
+  - Files: `src/services/review.py`, `src/tasks/review.py`, `src/bot/handlers/review.py`, `prompts/review_*.j2`, `tests/unit/test_review*.py`
+  - Pre-commit: `uv run pytest tests/unit/test_review*.py -v`
 
 - [ ] 58. Phase 4 Integration Tests + Full End-to-End Verification
 
@@ -4851,8 +4852,8 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - [ ] `tests/e2e/test_full_journey.py` — Complete user journey simulation (1 long test with 13 steps)
   - [ ] `tests/e2e/test_performance.py` — Performance benchmarks (4 tests)
   - [ ] `frontend/e2e/full-dashboard.spec.ts` — Full dashboard E2E (6+ tests)
-  - [ ] `pytest tests/integration/test_phase4*.py tests/e2e/ -v` → PASS (17+ tests)
-  - [ ] `npx playwright test` → PASS (all E2E tests)
+  - [ ] `uv run pytest tests/integration/test_phase4*.py tests/e2e/ -v` → PASS (17+ tests)
+  - [ ] `cd frontend && npx playwright test` → PASS (all E2E tests)
 
   **QA Scenarios:**
 
@@ -4916,7 +4917,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   **Commit**: YES
   - Message: `test(phase4): comprehensive integration tests, E2E journey, and performance benchmarks`
   - Files: `tests/integration/test_phase4_integration.py`, `tests/e2e/`, `frontend/e2e/full-dashboard.spec.ts`
-  - Pre-commit: `pytest tests/integration/test_phase4*.py -v && npx playwright test`
+  - Pre-commit: `uv run pytest tests/integration/test_phase4*.py -v && cd frontend && npx playwright test`
 
 ---
 
@@ -4929,10 +4930,10 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
 - [ ] F2. **Code Quality Review** — `unspecified-high`
-  Run `ruff check .` + `mypy .` + `pytest tests/ -v`. Review all changed files for: `type: ignore`, bare `except:`, `print()` in prod, commented-out code, unused imports. Check AI slop: excessive comments, over-abstraction, generic names (data/result/item/temp). Run `npm run lint` + `npm run build` for Next.js (Phase 2+).
+  Run `uv run ruff check .` + `uv run mypy .` + `uv run pytest tests/ -v`. Review all changed files for: `type: ignore`, bare `except:`, `print()` in prod, commented-out code, unused imports. Check AI slop: excessive comments, over-abstraction, generic names (data/result/item/temp). Run `cd frontend && npm run lint && npm run build` for Next.js (Phase 2+).
   Output: `Ruff [PASS/FAIL] | Mypy [PASS/FAIL] | Pytest [N pass/N fail] | Files [N clean/N issues] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `unspecified-high` (+ `playwright` skill for web UI)
+- [ ] F3. **Agent-Executed QA Sweep** — `unspecified-high` (+ `playwright` skill for web UI)
   Start from clean state (`docker compose down -v && docker compose up -d`). Execute EVERY QA scenario from EVERY completed phase. Test: RSS fetches real content, pipeline processes end-to-end, Telegram bot responds, feedback updates DB. For Phase 2+: Playwright tests on web UI. Save to `.sisyphus/evidence/final-qa/`.
   Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
@@ -4945,25 +4946,26 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 ## Commit Strategy
 
 > Group commits by logical unit. Each task gets its own commit unless explicitly grouped.
+> Python-related pre-commit commands should run via `uv run ...`.
 
 | Wave | Commit Message | Files | Pre-commit |
 |------|---------------|-------|------------|
-| 0.1 | `chore(infra): scaffold project + Docker Compose + dev tooling` | docker-compose.yml, pyproject.toml, Makefile, .env.example, alembic/ | `ruff check .` |
-| 0.1 | `feat(db): PostgreSQL schema + Alembic migrations` | alembic/versions/, src/models/ | `pytest tests/unit/test_models.py` |
-| 0.1 | `feat(core): Pydantic models + LLM abstraction + prompts` | src/schemas/, src/llm/, prompts/ | `pytest tests/unit/` |
-| 0.2 | `feat(connectors): RSS/Atom + arXiv with full-text extraction` | src/connectors/ | `pytest tests/unit/test_connectors.py` |
-| 0.2 | `feat(pipeline): gatekeeper + understanding + scoring services` | src/services/ | `pytest tests/unit/test_services.py` |
-| 0.3 | `feat(pipeline): orchestrator + state machine` | src/pipeline/ | `pytest tests/unit/test_pipeline.py` |
-| 0.3 | `feat(bot): Telegram bot + feedback handler` | src/bot/ | `pytest tests/unit/test_bot.py` |
-| 0.4 | `test(e2e): integration tests + smoke test` | tests/integration/ | `pytest tests/ -v` |
+| 0.1 | `chore(infra): scaffold project + Docker Compose + dev tooling` | docker-compose.yml, pyproject.toml, Makefile, .env.example, alembic/ | `uv run ruff check .` |
+| 0.1 | `feat(db): PostgreSQL schema + Alembic migrations` | alembic/versions/, src/models/ | `uv run pytest tests/unit/test_models.py` |
+| 0.1 | `feat(core): Pydantic models + LLM abstraction + prompts` | src/schemas/, src/llm/, prompts/ | `uv run pytest tests/unit/` |
+| 0.2 | `feat(connectors): RSS/Atom + arXiv with full-text extraction` | src/connectors/ | `uv run pytest tests/unit/test_connectors.py` |
+| 0.2 | `feat(pipeline): gatekeeper + understanding + scoring services` | src/services/ | `uv run pytest tests/unit/test_services.py` |
+| 0.3 | `feat(pipeline): orchestrator + state machine` | src/pipeline/ | `uv run pytest tests/unit/test_pipeline.py` |
+| 0.3 | `feat(bot): Telegram bot + feedback handler` | src/bot/ | `uv run pytest tests/unit/test_bot.py` |
+| 0.4 | `test(e2e): integration tests + smoke test` | tests/integration/ | `uv run pytest tests/ -v` |
 | 0.4 | `docs: update DESIGN.md - fix 9 inconsistencies` | DESIGN.md | — |
-| 1.x | `feat(scoring): 7-dimension quality scoring + push ranking` | src/services/scoring.py, src/services/ranking.py | `pytest tests/` |
-| 1.x | `feat(search): Meilisearch integration + dedup` | src/services/search.py, docker-compose.yml | `pytest tests/` |
-| 2.x | `feat(graph): Neo4j setup + knowledge graph + subgraph gen` | src/graph/, docker-compose.yml | `pytest tests/` |
-| 2.x | `feat(frontend): Next.js dashboard - feed, detail, settings` | frontend/ | `npm run lint && npm run build` |
-| 3.x | `feat(cognitive): FSRS + memory system + reports` | src/cognitive/ | `pytest tests/` |
-| 4.x | `feat(connectors): 10+ additional content sources` | src/connectors/ | `pytest tests/` |
-| 4.x | `feat(explore): ε-greedy + QA flow + KG visualization` | src/, frontend/ | `pytest tests/ && npm run build` |
+| 1.x | `feat(scoring): 7-dimension quality scoring + push ranking` | src/services/scoring.py, src/services/ranking.py | `uv run pytest tests/` |
+| 1.x | `feat(search): Meilisearch integration + dedup` | src/services/search.py, docker-compose.yml | `uv run pytest tests/` |
+| 2.x | `feat(graph): Neo4j setup + knowledge graph + subgraph gen` | src/graph/, docker-compose.yml | `uv run pytest tests/` |
+| 2.x | `feat(frontend): Next.js dashboard - feed, detail, settings` | frontend/ | `cd frontend && npm run lint && npm run build` |
+| 3.x | `feat(cognitive): FSRS + memory system + reports` | src/services/, frontend/src/app/reports/ | `uv run pytest tests/` |
+| 4.x | `feat(connectors): 10+ additional content sources` | src/connectors/ | `uv run pytest tests/` |
+| 4.x | `feat(explore): ε-greedy + QA flow + KG visualization` | src/, frontend/ | `uv run pytest tests/ && cd frontend && npm run build` |
 
 ---
 
@@ -4975,31 +4977,31 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 docker compose up -d && sleep 15
 docker compose ps  # Expected: all 6 services healthy
 curl -sf http://localhost:8000/health  # Expected: {"status":"ok"}
-curl -sf http://localhost:8000/api/v1/connectors/rss/fetch -d '{"feed_url":"https://hnrss.org/frontpage","limit":3}' | python -m json.tool  # Expected: items array with 3 entries
-pytest tests/ -v --tb=short  # Expected: all pass, 0 failures
+curl -sf http://localhost:8000/api/v1/connectors/rss/fetch -d '{"feed_url":"https://hnrss.org/frontpage","limit":3}' | uv run python -m json.tool  # Expected: items array with 3 entries
+uv run pytest tests/ -v --tb=short  # Expected: all pass, 0 failures
 
 # Phase 1
-curl -sf http://localhost:8000/api/v1/content?scored=true | python -m json.tool  # Expected: items with quality_score fields
+curl -sf http://localhost:8000/api/v1/content?scored=true | uv run python -m json.tool  # Expected: items with quality_score fields
 curl -sf http://localhost:7700/indexes  # Expected: Meilisearch content index exists
 
 # Phase 2
 curl -sf http://localhost:7474  # Expected: Neo4j browser accessible
 curl -sf http://localhost:3000  # Expected: Next.js dashboard loads
-pytest tests/ -v  # Expected: all pass including graph tests
+uv run pytest tests/ -v  # Expected: all pass including graph tests
 
 # Phase 3
 curl -sf http://localhost:8000/api/v1/reports/weekly  # Expected: generated report
-pytest tests/ -v  # Expected: all pass including FSRS tests
+uv run pytest tests/ -v  # Expected: all pass including FSRS tests
 
 # Phase 4
-pytest tests/ -v  # Expected: all pass, full coverage
+uv run pytest tests/ -v  # Expected: all pass, full coverage
 docker compose logs --tail=100  # Expected: no errors in last 100 lines
 ```
 
 ### Final Checklist
 - [ ] All "Must Have" present and verified
 - [ ] All "Must NOT Have" absent (no vector DB, no Neo4j GDS, no Celery chains)
-- [ ] All tests pass (`pytest tests/ -v` and `npm run test` for frontend)
+- [ ] All tests pass (`uv run pytest tests/ -v` and `cd frontend && npx vitest run` for frontend)
 - [ ] Docker Compose starts cleanly on both local laptop and VPS
 - [ ] DESIGN.md updated with all 9 corrections
 - [ ] Each phase has passing E2E smoke test

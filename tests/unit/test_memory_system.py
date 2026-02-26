@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 from alice.models.user_memory import MemoryLayer, UserMemory
-from alice.services.memory_system import MemoryContext, MemoryManager
+from alice.services.memory_system import MemoryManager
 
 
 def _make_memory(
@@ -54,6 +52,7 @@ class TestWorkingMemory:
         result = await manager.update_working_memory(
             session, user_id=1, declaration="Researching MoE load balancing"
         )
+        assert result is not None
         session.add.assert_called_once()
         session.commit.assert_called_once()
 

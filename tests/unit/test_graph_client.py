@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from alice.graph.schema import NodeLabel, RelType, SCHEMA_STATEMENTS
+import pytest
+
 from alice.graph.client import GraphClient
 from alice.graph.repository import GraphRepository
-
+from alice.graph.schema import SCHEMA_STATEMENTS, NodeLabel, RelType
 
 # ── Schema constants tests ──────────────────────────────────────────────────
 
@@ -161,6 +161,7 @@ def mock_graph_client():
 async def test_upsert_concept_calls_merge(mock_graph_client):
     repo = GraphRepository(mock_graph_client)
     result = await repo.upsert_concept("transformer", NodeLabel.CONCEPT, ["变换器"])
+    assert result == {"name": "transformer", "aliases": []}
     mock_graph_client.execute_query.assert_awaited_once()
     call_args = mock_graph_client.execute_query.call_args
     # parameters dict is the second positional arg

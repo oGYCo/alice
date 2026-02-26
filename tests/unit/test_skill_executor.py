@@ -9,12 +9,10 @@ import pytest
 
 from alice.services.kg_updater import KGUpdateResult
 from alice.services.skill_executor import (
+    _DEFAULT_SKILLS_PATH,
     FeedbackType,
-    Skill,
     SkillContext,
     SkillExecutor,
-    SkillResult,
-    _DEFAULT_SKILLS_PATH,
 )
 
 # Path to the real skills.yaml used in all tests

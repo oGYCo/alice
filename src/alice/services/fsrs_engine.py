@@ -183,8 +183,8 @@ class FSRSEngine:
 
     def _update_stability(self, card: ReviewCard, rating: Rating) -> float:
         """Compute new stability value based on current state and rating."""
-        S = card.stability
-        D = card.difficulty
+        stability = card.stability
+        difficulty = card.difficulty
 
         if card.state == CardState.new:
             # First time seeing the card
@@ -192,17 +192,17 @@ class FSRSEngine:
 
         if rating == Rating.again:
             # Lapse: stability halved
-            return max(0.1, S * 0.5)
+            return max(0.1, stability * 0.5)
 
         if rating == Rating.hard:
-            return max(0.1, S * 0.8)
+            return max(0.1, stability * 0.8)
 
         # Good or Easy — stability increase
         # FSRS v5 simplified: S_new = S * e^(w * (1 - D/10)) * rating_factor
         # where w=0.9, rating_factor=1.0 for Good, 1.3 for Easy
         w = 0.9
         rating_factor = 1.0 if rating == Rating.good else 1.3
-        new_s = S * math.exp(w * (1.0 - D / 10.0)) * rating_factor
+        new_s = stability * math.exp(w * (1.0 - difficulty / 10.0)) * rating_factor
         return max(0.1, new_s)
 
     def _update_difficulty(self, card: ReviewCard, rating: Rating) -> float:

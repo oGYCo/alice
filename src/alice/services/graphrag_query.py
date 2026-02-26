@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import enum
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Protocol, cast
 
 import structlog
@@ -44,7 +44,7 @@ TEXT_SEARCH_LIMIT: int = 20
 # ---------------------------------------------------------------------------
 
 
-class QueryMode(str, enum.Enum):
+class QueryMode(StrEnum):
     HYBRID = "hybrid"
     GRAPH_ONLY = "graph_only"
     TEXT_ONLY = "text_only"

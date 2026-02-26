@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 
 import structlog
 from pydantic import BaseModel
 
 from alice.graph.client import GraphClient
-from alice.graph.schema import NodeLabel, RelType
 
 
 class _Logger(Protocol):

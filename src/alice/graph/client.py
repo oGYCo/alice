@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Protocol, cast
 
 import structlog
-from neo4j import AsyncGraphDatabase, AsyncDriver
+from neo4j import AsyncDriver, AsyncGraphDatabase
 
 from alice.graph.schema import SCHEMA_STATEMENTS
 
@@ -39,7 +39,7 @@ class GraphClient:
             self._driver = None
             logger.info("neo4j_closed")
 
-    async def __aenter__(self) -> "GraphClient":
+    async def __aenter__(self) -> GraphClient:
         await self.connect()
         return self
 

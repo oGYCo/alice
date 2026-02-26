@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol, cast
 
 import structlog
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from alice.models.user_memory import MemoryLayer, UserMemory

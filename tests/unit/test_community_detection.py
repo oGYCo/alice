@@ -7,11 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from alice.services.community_detection import (
-    BridgeConcept,
-    Community,
     CommunityDetector,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

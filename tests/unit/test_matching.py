@@ -10,12 +10,8 @@ from alice.graph.extractor import ContentSubgraph, ContentSubgraphEdge, ContentS
 from alice.graph.user_kg import KnowledgeNode
 from alice.services.matching import (
     DEFAULT_RECOMMEND_THRESHOLD,
-    MASTERY_THRESHOLD,
-    MAX_HOPS,
     MatchingService,
-    MatchResult,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures

@@ -7,7 +7,7 @@ from typing import Any, Protocol, cast
 import structlog
 
 from alice.graph.client import GraphClient
-from alice.graph.schema import NodeLabel, RelType
+from alice.graph.schema import NodeLabel
 
 
 class _Logger(Protocol):

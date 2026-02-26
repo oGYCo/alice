@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
-from alice.services.user_state import PushModifiers, TransitionResult, UserMode, UserStateManager
+from alice.services.user_state import UserMode, UserStateManager
 
 
 def _make_manager() -> UserStateManager:

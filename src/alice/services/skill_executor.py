@@ -10,7 +10,7 @@ from typing import Any, Protocol, cast
 import structlog
 import yaml
 
-from alice.services.kg_updater import KGUpdateResult, KGUpdater
+from alice.services.kg_updater import KGUpdater, KGUpdateResult
 
 
 class _Logger(Protocol):

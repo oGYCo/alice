@@ -5,10 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
-import pytest
-
 from alice.models.review_card import CardState, ReviewCard
-from alice.services.fsrs_engine import FSRSEngine, Rating, ReviewSchedule, UpdatedCard
+from alice.services.fsrs_engine import FSRSEngine, Rating, ReviewSchedule
 
 
 def _make_card(

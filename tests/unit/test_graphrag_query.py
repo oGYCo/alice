@@ -8,16 +8,11 @@ import pytest
 
 from alice.graph.user_kg import KnowledgeNode
 from alice.services.graphrag_query import (
-    GRAPHRAG_GRAPH_WEIGHT,
-    GRAPHRAG_TEXT_WEIGHT,
     GraphHit,
     GraphRAGQueryEngine,
-    QueryMode,
-    RankedResult,
     SemanticHit,
     TextHit,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

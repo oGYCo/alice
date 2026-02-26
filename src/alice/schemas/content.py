@@ -44,6 +44,7 @@ class ContentResponseSchema(BaseModel):
     key_points: list[str] | None = None
     domains: list[str] | None = None
     estimated_read_time: int | None = None
+    metadata_: dict | None = Field(default=None, validation_alias="metadata_")
     created_at: datetime
 
     model_config = {"from_attributes": True}

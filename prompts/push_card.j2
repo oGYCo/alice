@@ -1,14 +1,42 @@
+{% if card_type | default("deep_knowledge") == "time_sensitive" %}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-{% if estimated_read_time %}📚 预计阅读 {{ estimated_read_time }} 分钟{% else %}📚 内容推送{% endif %}
+⚡ 时效信息
 
-*{{ title | default("(无标题)") }}*
+{{ title }}
+
+What: {{ what | default(summary) }}
+Impact: {{ impact | default("") }}
+
+🔗 {{ source_url }}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+{% elif card_type | default("deep_knowledge") == "thought_provoking" %}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 思想性内容{% if estimated_read_time %} · 预计阅读 {{ estimated_read_time }} 分钟{% endif %}
+
+{{ title }}
+
+{{ summary }}
+
+推送原因：{{ push_reason | default("") }}
+
+🔗 原文链接: {{ source_url }}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+{% else %}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 硬核知识 · 预计阅读 {{ estimated_read_time | default("") }} 分钟
+
+{{ title }}
 
 ┈┈ 核心内容 ┈┈
 {{ summary | default("") }}
 
+┈┈ 推送原因 ┈┈
+{{ push_reason | default("") }}
+
 {% if key_points %}┈┈ 关键要点 ┈┈
 {% for point in key_points %}• {{ point }}
-{% endfor %}
-{% endif %}🔗 [原文链接]({{ source_url }})
-
+{% endfor %}{% endif %}{% if reading_advice %}┈┈ 阅读建议 ┈┈
+{{ reading_advice }}
+{% endif %}🔗 原文链接: {{ source_url }}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
+{% endif %}

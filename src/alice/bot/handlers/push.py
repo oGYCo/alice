@@ -7,6 +7,7 @@ import time
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from alice.prompts import prompt_manager
 from alice.schemas.content import ContentResponseSchema
 from alice.schemas.feedback import FeedbackType
 
@@ -34,74 +35,108 @@ _EXTRA_BUTTONS: list[tuple[str, str]] = [
 # ---------------------------------------------------------------------------
 
 
+def _get_card_type(content: ContentResponseSchema) -> str:
+    """Infer card type from content metadata classification."""
+    metadata = content.metadata_ or {}
+    content_type = metadata.get("content_type", "deep_knowledge")
+    if content_type in ("time_sensitive", "news", "release"):
+        return "time_sensitive"
+    if content_type in ("thought_provoking", "opinion", "essay"):
+        return "thought_provoking"
+    return "deep_knowledge"  # default
+
+
+def _build_buttons_for_card_type(
+    card_type: str, content_id: int
+) -> list[list[InlineKeyboardButton]]:
+    """Build inline keyboard based on card type."""
+    if card_type == "time_sensitive":
+        # 1 row, 2 buttons
+        row = [
+            InlineKeyboardButton(
+                text="✅已了解",
+                callback_data=f"feedback:valuable_learned:{content_id}",
+            ),
+            InlineKeyboardButton(
+                text="📌需要跟进",
+                callback_data=f"feedback:save_for_later:{content_id}",
+            ),
+        ]
+        return [row]
+    elif card_type == "thought_provoking":
+        # 1 row, 4 buttons
+        row = [
+            InlineKeyboardButton(
+                text="👍有启发",
+                callback_data=f"feedback:valuable_learned:{content_id}",
+            ),
+            InlineKeyboardButton(
+                text="⏰稍后",
+                callback_data=f"feedback:save_for_later:{content_id}",
+            ),
+            InlineKeyboardButton(
+                text="👎无感",
+                callback_data=f"feedback:not_valuable:{content_id}",
+            ),
+            InlineKeyboardButton(
+                text="💬讨论",
+                callback_data=f"discuss:{content_id}",
+            ),
+        ]
+        return [row]
+    else:
+        # deep_knowledge: 2 rows, 3+3 buttons
+        row1 = [
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"feedback:{fb_type}:{content_id}",
+            )
+            for label, fb_type in _FEEDBACK_BUTTONS[:3]
+        ]
+        row2_feedback = [
+            InlineKeyboardButton(
+                text=_FEEDBACK_BUTTONS[3][0],
+                callback_data=f"feedback:{_FEEDBACK_BUTTONS[3][1]}:{content_id}",
+            )
+        ]
+        row2_extra = [
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"{cb_prefix}:{content_id}",
+            )
+            for label, cb_prefix in _EXTRA_BUTTONS
+        ]
+        row2 = row2_feedback + row2_extra
+        return [row1, row2]
+
+
 def build_push_card(
     content: ContentResponseSchema,
 ) -> tuple[str, InlineKeyboardMarkup]:
-    """Build Telegram push card text and inline keyboard markup.
+    """Build Telegram push card text and inline keyboard markup using PromptManager.
 
-    Returns (text, markup) — text is Markdown-formatted, markup has 6 buttons.
+    Returns (text, markup) — text is Markdown-formatted, markup has buttons based on card type.
     """
-    title = content.title or "(无标题)"
-    summary = content.summary or ""
-    read_time = content.estimated_read_time
-    source_url = content.source_url
+    card_type = _get_card_type(content)
+    metadata = content.metadata_ or {}
 
-    lines: list[str] = []
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
+    text = prompt_manager.render(
+        "push_card",
+        card_type=card_type,
+        title=content.title or "(无标题)",
+        summary=content.summary or "",
+        key_points=content.key_points or [],
+        source_url=content.source_url or "",
+        estimated_read_time=content.estimated_read_time,
+        push_reason=metadata.get("push_reason", ""),
+        reading_advice=metadata.get("reading_advice", ""),
+        what=metadata.get("what", ""),
+        impact=metadata.get("impact", ""),
+    )
 
-    # Header — read time if available
-    if read_time:
-        lines.append(f"📚 预计阅读 {read_time} 分钟")
-    else:
-        lines.append("📚 内容推送")
-
-    lines.append("")
-    lines.append(f"*{title}*")
-    lines.append("")
-
-    # Summary
-    lines.append("┈┈ 核心内容 ┈┈")
-    lines.append(summary)
-    lines.append("")
-
-    # Key points
-    if content.key_points:
-        lines.append("┈┈ 关键要点 ┈┈")
-        for point in content.key_points:
-            lines.append(f"• {point}")
-        lines.append("")
-
-    # Source link
-    lines.append(f"🔗 [原文链接]({source_url})")
-    lines.append("")
-    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-    text = "\n".join(lines)
-
-    # Build inline keyboard — 2 rows of 3
-    row1 = [
-        InlineKeyboardButton(
-            text=label,
-            callback_data=f"feedback:{fb_type}:{content.id}",
-        )
-        for label, fb_type in _FEEDBACK_BUTTONS[:3]
-    ]
-    row2_feedback = [
-        InlineKeyboardButton(
-            text=_FEEDBACK_BUTTONS[3][0],
-            callback_data=f"feedback:{_FEEDBACK_BUTTONS[3][1]}:{content.id}",
-        )
-    ]
-    row2_extra = [
-        InlineKeyboardButton(
-            text=label,
-            callback_data=f"{cb_prefix}:{content.id}",
-        )
-        for label, cb_prefix in _EXTRA_BUTTONS
-    ]
-    row2 = row2_feedback + row2_extra
-
-    markup = InlineKeyboardMarkup(inline_keyboard=[row1, row2])
+    # Build inline keyboard based on card type
+    keyboard = _build_buttons_for_card_type(card_type, content.id)
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     return text, markup
 
 

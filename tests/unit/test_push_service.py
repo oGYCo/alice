@@ -31,6 +31,7 @@ def _make_content(**kwargs) -> MagicMock:
         pushed_at=None,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
+        metadata_=None,
     )
     defaults.update(kwargs)
     obj = MagicMock(spec=Content)

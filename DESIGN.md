@@ -200,7 +200,7 @@ RawContent → [前置清洗] → [内容理解] → [质量评估] → [入库�
 ### 4.2 第二级：内容理解（Content Understanding）
 
 **目标**：深度理解内容，提取结构化信息。
-**执行者**：高能力模型（如 Claude / GPT-4o / Deepseek）
+**执行者**：高能力模型（如 DeepSeek API / Claude API / OpenAI API）
 **提取信息**：
 
 ```typescript
@@ -276,6 +276,7 @@ $$Q_{total} = \sum_{i=1}^{n} w_i \cdot q_i$$
 
 1. **结构化存储**（PostgreSQL）：内容元数据、分类、评分、状态
 2. **知识图谱**（Neo4j / Memgraph）：概念实体和关系，保存用户图谱与每条内容子图
+   - **注意**：Neo4j GDS（Leiden 社区检测、PageRank 等算法）需要 Enterprise 版本。推荐在 Python 侧使用 NetworkX + leidenalg 库进行图算法计算。
 3. **匹配结果索引**：记录 `content_subgraph ↔ user_kg` 的匹配分、未满足前置、推荐结论
 4. **全文索引**（Meilisearch / Elasticsearch）：支持关键词搜索和高亮
 
@@ -858,7 +859,7 @@ push_schedule:
 
 ## 13. 交互层设计
 
-### 13.1 Telegram Bot
+### 13.1 Telegram Bot (aiogram v3)
 
 **核心功能**：
 
@@ -1012,13 +1013,13 @@ Dashboard
 
 ## 15. 认知衰退与间隔复习
 
-### 15.1 基于艾宾浩斯曲线的复习调度
+### 15.1 基于 FSRS（Free Spaced Repetition Scheduler）的复习调度
 
 对用户标记为"高价值"的硬核知识，按以下间隔复习：
 
 $$R(t) = e^{-t/S}$$
 
-其中 $R(t)$ 为记忆保持率，$t$ 为时间，$S$ 为稳定性系数（由用户在复习时的表现动态调整）。
+其中 $R(t)$ 为记忆保持率，$t$ 为时间。FSRS 是一种现代化的间隔复习算法，相比传统艾宾浩斯曲线更加精确和自适应。
 
 **默认复习间隔**：1天 → 3天 → 7天 → 14天 → 30天 → 90天
 
@@ -1060,7 +1061,7 @@ LLM API 调用是最大的成本来源，需要精细优化：
 
 | 策略               | 说明                                                 | 预估节省            |
 | ------------------ | ---------------------------------------------------- | ------------------- |
-| **分层模型调用**   | 前置清洗用小模型（Qwen-7B 本地），深度理解才用大模型 | 60-70%              |
+| **分层模型调用**   | 前置清洗用轻量本地模型（Qwen 1.5B/3B），深度理解才用大模型 API | 60-70%              |
 | **内容缓存**       | 相似内容的评估结果可复用                             | 15-20%              |
 | **批量处理**       | 累积一批内容后批量调用，减少 API 开销                | 10-15%              |
 | **摘要缓存**       | 同一内容跨用户共享摘要（多用户场景）                 | 20-30%              |
@@ -1071,7 +1072,7 @@ LLM API 调用是最大的成本来源，需要精细优化：
 | 组件                         | 月成本（USD，估算） |
 | ---------------------------- | ------------------- |
 | LLM API（大模型，深度理解）  | $15-30              |
-| LLM API（小模型/本地，清洗） | $0-5                |
+| LLM API（小模型/本地，清洗） | Ollama 推理资源，无 API 成本 |
 | 关系数据库（云托管）         | $5-10               |
 | 服务器/VPS                   | $10-20              |
 | **总计**                     | **$30-65/月**       |
@@ -1117,20 +1118,20 @@ LLM API 调用是最大的成本来源，需要精细优化：
 | 组件           | 推荐选型                  | 备选                     |
 | -------------- | ------------------------- | ------------------------ |
 | **主语言**     | Python (FastAPI)          | Go, TypeScript (Bun)     |
-| **任务队列**   | Celery + Redis / Dramatiq | Temporal, BullMQ         |
+| **任务队列**   | Celery + Redis / Dramatiq (个体任务执行，NO Celery chains - 一个失败会导致整条链中断，而是使用 DB 状态机) | Temporal, BullMQ         |
 | **消息总线**   | Redis Streams / NATS      | Kafka（大规模时）        |
 | **关系数据库** | PostgreSQL                | —                        |
 | **图数据库**   | Neo4j                     | Memgraph, FalkorDB       |
 | **全文搜索**   | Meilisearch               | Elasticsearch            |
-| **缓存**       | Redis                     | —                        |
+| **缓存**       | Redis (appendonly yes 配置持久化)                  | —                        |
 | **对象存储**   | MinIO (自托管) / S3       | —                        |
 
 ### 18.2 AI/ML 组件
 
 | 组件             | 推荐选型                                      |
 | ---------------- | --------------------------------------------- |
-| **大模型 API**    | Claude API / DeepSeek API / OpenAI API        |
-| **本地小模型**     | Qwen2.5-7B via Ollama / vLLM                  |
+| **大模型 API**    | DeepSeek API (推荐) / Claude API / OpenAI API |
+| **本地轻量模型**   | Qwen 1.5B/3B via Ollama (RTX 4060 Laptop, ~1.2GB VRAM) |
 | **音频转文字**     | Whisper (本地) / Groq Whisper API             |
 | **PDF 解析**      | marker / nougat / pymupdf4llm                 |
 | **知识图谱构建**   | LLM + 自定义 prompt chain                     |
@@ -1163,7 +1164,7 @@ LLM API 调用是最大的成本来源，需要精细优化：
 
 ### Phase 0：基础验证（2-3 周）
 - [ ] 搭建项目骨架（FastAPI + PostgreSQL + Redis）
-- [ ] 实现 2-3 个核心 Connector（RSS、arXiv、GitHub Release）
+- [ ] 实现 2-3 个核心 Connector（RSS/Atom、arXiv 为主）
 - [ ] 实现基础内容处理管道（清洗 + LLM 摘要）
 - [ ] 实现最简 Telegram Bot（推送 + 基础反馈按钮）
 - [ ] 验证端到端流程可跑通

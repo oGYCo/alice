@@ -1,0 +1,13 @@
+
+Running 8 tests using 3 workers
+
+  ✓  3 [chromium] › e2e/navigation.spec.ts:4:7 › Navigation › root redirects or renders without crashing (327ms)
+  ✓  2 [chromium] › e2e/feed.spec.ts:4:7 › Feed Page › loads and shows feed page structure (327ms)
+  ✓  1 [chromium] › e2e/settings.spec.ts:4:7 › Settings Page › loads settings page without error (335ms)
+  ✓  4 [chromium] › e2e/navigation.spec.ts:11:7 › Navigation › can navigate from feed to settings via sidebar links (372ms)
+  ✓  6 [chromium] › e2e/settings.spec.ts:10:7 › Settings Page › settings page renders tabs (580ms)
+  ✓  5 [chromium] › e2e/feed.spec.ts:12:7 › Feed Page › feed page has header with controls (593ms)
+  ✓  7 [chromium] › e2e/feed.spec.ts:20:7 › Feed Page › feed page shows skeleton or content after load (366ms)
+  ✓  8 [chromium] › e2e/feed.spec.ts:31:7 › Feed Page › feed page renders buttons (header controls) (354ms)
+
+  8 passed (2.6s)

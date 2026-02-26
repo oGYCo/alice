@@ -3028,7 +3028,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `tests/integration/test_phase2_*.py`, `tests/integration/test_telegram_flow.py`
   - Pre-commit: `uv run pytest tests/integration/ -v --timeout=120`
 
-- [ ] 39. Frontend Tests — Vitest + Playwright E2E
+- [x] 39. Frontend Tests — Vitest + Playwright E2E
 
   **What to do**:
   - Vitest unit tests for all Phase 2 components:

@@ -1,0 +1,18 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/Users/ogyco/alice/frontend[39m
+
+ [32m✓[39m src/__tests__/api.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/layout.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/components/feed/__tests__/ContentCard.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m src/components/settings/__tests__/Settings.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 77[2mms[22m[39m
+ [32m✓[39m src/components/feed/__tests__/FeedPage.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 163[2mms[22m[39m
+[90mstdout[2m | src/components/content/__tests__/ContentDetail.test.tsx[2m > [22m[2mContentDetailPage[2m > [22m[2mhandles feedback submission
+[22m[39mFeedback positive submitted for 1
+
+ [32m✓[39m src/components/content/__tests__/ContentDetail.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 76[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[32m31 passed[39m[22m[90m (31)[39m
+[2m   Start at [22m 19:39:35
+[2m   Duration [22m 907ms[2m (transform 346ms, setup 254ms, import 1.24s, tests 425ms, environment 1.95s)[22m
+

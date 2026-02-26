@@ -2008,7 +2008,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/scheduler.py`, `src/api/v1/settings.py`
   - Pre-commit: `uv run pytest tests/unit/test_push_scheduler.py -v`
 
-- [ ] 25. Search API Endpoints
+- [x] 25. Search API Endpoints
 
   **What to do**:
   - Enhance `src/api/v1/search.py` (from T21):

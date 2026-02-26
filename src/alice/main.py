@@ -12,12 +12,14 @@ _content_module = importlib.import_module("alice.api.v1.content")
 _sources_module = importlib.import_module("alice.api.v1.sources")
 _pipeline_module = importlib.import_module("alice.api.v1.pipeline")
 _settings_module = importlib.import_module("alice.api.v1.settings")
+_search_module = importlib.import_module("alice.api.v1.search")
 
 connectors_router = _connectors_module.router
 content_router = _content_module.router
 sources_router = _sources_module.router
 pipeline_router = _pipeline_module.router
 settings_router = _settings_module.router
+search_router = _search_module.router
 
 
 def create_app() -> FastAPI:
@@ -37,6 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(connectors_router, prefix="/api/v1")
     app.include_router(pipeline_router, prefix="/api/v1")
     app.include_router(settings_router, prefix="/api/v1")
+    app.include_router(search_router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():

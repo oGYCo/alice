@@ -1,0 +1,138 @@
+"""Pipeline control API — process, status, retry endpoints."""
+
+from __future__ import annotations
+
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from alice.db import get_db
+from alice.models.content import Content, PipelineStatus
+from alice.pipeline.tasks import task_run_gatekeeper
+from alice.services.storage import ContentStorageService
+
+router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+
+
+# ---------------------------------------------------------------------------
+# Request / Response schemas
+# ---------------------------------------------------------------------------
+
+
+class ProcessRequest(BaseModel):
+    content_id: int
+
+
+class PipelineStatusResponse(BaseModel):
+    queued: int
+    processing: int
+    completed: int
+    failed: int
+
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+
+
+def _get_storage(session: Annotated[AsyncSession, Depends(get_db)]) -> ContentStorageService:
+    return ContentStorageService(session)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/process", status_code=202)
+async def process_content(
+    body: ProcessRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Any:
+    """Trigger pipeline processing for a content item.
+
+    The content must already exist with pipeline_status='fetched'.
+    Returns 202 Accepted immediately; processing is async.
+    """
+    storage = ContentStorageService(session)
+    content = await storage.get_by_id(body.content_id)
+    if content is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Content {body.content_id} not found",
+        )
+    if content.pipeline_status != PipelineStatus.fetched:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Content {body.content_id} is not in 'fetched' state "
+                f"(current: {content.pipeline_status})"
+            ),
+        )
+
+    task_run_gatekeeper.delay(body.content_id)
+    return {"content_id": body.content_id, "status": "queued"}
+
+
+@router.get("/status", response_model=PipelineStatusResponse)
+async def pipeline_status(
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Any:
+    """Return aggregate pipeline status counts."""
+    # queued = fetched (not yet dispatched)
+    # processing = gatekept + understood + scored (in-flight)
+    # completed = indexed
+    # failed = failed
+
+    async def _count(statuses: list[PipelineStatus]) -> int:
+        result = await session.execute(
+            select(func.count()).where(Content.pipeline_status.in_(statuses))
+        )
+        return result.scalar_one()
+
+    queued = await _count([PipelineStatus.fetched])
+    processing = await _count(
+        [PipelineStatus.gatekept, PipelineStatus.understood, PipelineStatus.scored]
+    )
+    completed = await _count([PipelineStatus.indexed])
+    failed = await _count([PipelineStatus.failed])
+
+    return PipelineStatusResponse(
+        queued=queued,
+        processing=processing,
+        completed=completed,
+        failed=failed,
+    )
+
+
+@router.post("/retry/{content_id}", status_code=202)
+async def retry_content(
+    content_id: int,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Any:
+    """Retry processing for a failed content item.
+
+    Resets the status to 'fetched' and re-dispatches gatekeeper.
+    """
+    storage = ContentStorageService(session)
+    content = await storage.get_by_id(content_id)
+    if content is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Content {content_id} not found",
+        )
+    if content.pipeline_status != PipelineStatus.failed:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Content {content_id} is not in 'failed' state "
+                f"(current: {content.pipeline_status})"
+            ),
+        )
+
+    await storage.update_pipeline_status(content_id, PipelineStatus.fetched)
+    task_run_gatekeeper.delay(content_id)
+    return {"content_id": content_id, "status": "queued"}

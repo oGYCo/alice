@@ -1,13 +1,19 @@
 """FastAPI application factory and main entry point."""
 
+import importlib
+
 from fastapi import FastAPI  # type: ignore[import-not-found]
 
 from alice.config import settings
 from alice.logging import setup_logging
 
-from .api.v1.connectors import router as connectors_router
-from .api.v1.content import router as content_router
-from .api.v1.sources import router as sources_router
+_connectors_module = importlib.import_module("alice.api.v1.connectors")
+_content_module = importlib.import_module("alice.api.v1.content")
+_sources_module = importlib.import_module("alice.api.v1.sources")
+
+connectors_router = _connectors_module.router
+content_router = _content_module.router
+sources_router = _sources_module.router
 
 
 def create_app() -> FastAPI:

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import importlib
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
+import pytest  # type: ignore
 
-from alice.connectors.rss import RSSConnector
-from alice.schemas.source import SourceConfigSchema
+_rss_module = importlib.import_module("alice.connectors.rss")
+_source_module = importlib.import_module("alice.schemas.source")
+
+RSSConnector = _rss_module.RSSConnector
+SourceConfigSchema = _source_module.SourceConfigSchema
 
 
 def fixtures_dir() -> Path:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import struct_time
 from typing import Protocol, TypedDict, cast
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -71,7 +71,7 @@ class RSSConnector(BaseConnector):
     async def fetch(self, config: SourceConfigSchema) -> list[RawContentSchema]:
         feed_xml = self._fetch_feed(config.url)
         parsed = self._parse_feed(feed_xml)
-        fetched_at = datetime.now(timezone.utc)
+        fetched_at = datetime.now(UTC)
 
         results: list[RawContentSchema] = []
         seen_urls: set[str] = set()
@@ -222,7 +222,7 @@ class RSSConnector(BaseConnector):
             parsed_time.tm_hour,
             parsed_time.tm_min,
             parsed_time.tm_sec,
-            tzinfo=timezone.utc,
+            tzinfo=UTC,
         )
 
     def _get_entry_text(self, entry: FeedEntry, key: str) -> str | None:

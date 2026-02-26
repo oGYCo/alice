@@ -9,6 +9,7 @@ Create Date: 2026-02-26 14:46:04.721247
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -21,19 +22,35 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Create enum types
-    pipelinestatus = sa.Enum(
-        "fetched", "gatekept", "understood", "scored", "indexed", "failed", name="pipelinestatus"
-    )
-    pipelinestatus.create(op.get_bind(), checkfirst=True)
+    # Create enum types idempotently via exception handling (safe for reruns)
+    op.execute(sa.text(
+        "DO $$ BEGIN "
+        "CREATE TYPE pipelinestatus AS ENUM "
+        "('fetched', 'gatekept', 'understood', 'scored', 'indexed', 'failed'); "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+    ))
+    op.execute(sa.text(
+        "DO $$ BEGIN "
+        "CREATE TYPE sourcetype AS ENUM ('rss', 'arxiv'); "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+    ))
+    op.execute(sa.text(
+        "DO $$ BEGIN "
+        "CREATE TYPE feedbacktype AS ENUM "
+        "('valuable_learned', 'save_for_later', 'not_valuable', 'already_known'); "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+    ))
 
-    sourcetype = sa.Enum("rss", "arxiv", name="sourcetype")
-    sourcetype.create(op.get_bind(), checkfirst=True)
-
-    feedbacktype = sa.Enum(
-        "valuable_learned", "save_for_later", "not_valuable", "already_known", name="feedbacktype"
+    # Use create_type=False so create_table doesn't try to recreate these types
+    pipelinestatus = postgresql.ENUM(
+        "fetched", "gatekept", "understood", "scored", "indexed", "failed",
+        name="pipelinestatus", create_type=False,
     )
-    feedbacktype.create(op.get_bind(), checkfirst=True)
+    sourcetype = postgresql.ENUM("rss", "arxiv", name="sourcetype", create_type=False)
+    feedbacktype = postgresql.ENUM(
+        "valuable_learned", "save_for_later", "not_valuable", "already_known",
+        name="feedbacktype", create_type=False,
+    )
 
     # Create users table
     op.create_table(

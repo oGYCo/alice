@@ -3086,7 +3086,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
 #### Wave 3.1 — Memory + Repetition + State
 
-- [ ] 40. FSRS Spaced Repetition Engine
+- [x] 40. FSRS Spaced Repetition Engine
 
   **What to do**:
   - Implement `src/services/fsrs_engine.py` — Free Spaced Repetition Scheduler (FSRS v5) algorithm:
@@ -3159,7 +3159,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/fsrs_engine.py`, `src/models/review_card.py`, `tests/unit/test_fsrs_engine.py`
   - Pre-commit: `uv run pytest tests/unit/test_fsrs_engine.py -v`
 
-- [ ] 41. 3-Tier Memory System (Working / Short-term / Long-term)
+- [x] 41. 3-Tier Memory System (Working / Short-term / Long-term)
 
   **What to do**:
   - Implement `src/services/memory_system.py` — three-layer memory per DESIGN.md:307-320:
@@ -3234,7 +3234,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/memory_system.py`, `src/models/user_memory.py`, `tests/unit/test_memory_system.py`
   - Pre-commit: `uv run pytest tests/unit/test_memory_system.py -v`
 
-- [ ] 42. User State Machine (日常/项目攻关/探索/低能量)
+- [x] 42. User State Machine (日常/项目攻关/探索/低能量)
 
   **What to do**:
   - Implement `src/services/user_state.py` — user mode state machine per DESIGN.md:375-396:
@@ -3384,7 +3384,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/report_generator.py`, `tests/unit/test_report_generator.py`, `prompts/weekly_report.j2`
   - Pre-commit: `uv run pytest tests/unit/test_report_generator.py -v`
 
-- [ ] 44. Advanced Feedback Skill System
+- [x] 44. Advanced Feedback Skill System
 
   **What to do**:
   - Implement `src/services/skill_executor.py` — formalize the skill system from DESIGN.md:685-732:
@@ -3454,7 +3454,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/skill_executor.py`, `config/skills.yaml`, `tests/unit/test_skill_executor.py`
   - Pre-commit: `uv run pytest tests/unit/test_skill_executor.py -v`
 
-- [ ] 45. Leiden Community Detection (NetworkX + leidenalg)
+- [x] 45. Leiden Community Detection (NetworkX + leidenalg)
 
   **What to do**:
   - Implement `src/services/community_detection.py` — knowledge graph community detection:

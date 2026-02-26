@@ -878,571 +878,288 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Pre-commit: `pytest tests/unit/test_rss_connector.py -v`
 
 - [ ] 8. arXiv Connector
-
   **What to do**:
-
   - Create `src/connectors/arxiv.py`: `ArxivConnector(BaseConnector)`:
-
     - Uses `arxiv` Python package to search by category (cs.AI, cs.LG, etc.) or keyword
-
     - Extracts: title, abstract, authors, published date, PDF URL, categories
-
     - Maps to `RawContentSchema` (abstract as raw_text, PDF URL in metadata)
-
     - Respects arXiv API rate limits (3 second delay between requests)
-
     - Configurable: categories, max_results, date range
-
   - Create `tests/fixtures/arxiv_responses/`: sample API response JSON
-
   - Create FastAPI endpoint: `POST /api/v1/connectors/arxiv/fetch`
-
   - TDD: Write tests with mocked arxiv responses first
-
   **Must NOT do**:
-
   - Do NOT download/parse PDF files (use abstract only for Phase 0)
-
   - Do NOT implement citation graph analysis
-
   **Recommended Agent Profile**:
-
   - **Category**: `deep`
-
     - Reason: arXiv API has quirks (rate limiting, date formatting, category taxonomy)
-
   - **Skills**: []
-
   **Parallelization**:
-
   - **Can Run In Parallel**: YES (with T7, T9-T12)
-
   - **Parallel Group**: Wave 0.2
-
   - **Blocks**: Tasks 13, 16
-
   - **Blocked By**: Tasks 2, 3
-
   **References**:
-
   **Pattern References**:
-
   - `DESIGN.md:143-163` — Connector design, arXiv as a source type
-
   - `DESIGN.md:128-141` — RawContent output contract
-
   **External References**:
-
   - arxiv Python package: https://github.com/lukasschwab/arxiv.py
-
   **Acceptance Criteria**:
-
   **TDD:**
-
   - [ ] Test file: `tests/unit/test_arxiv_connector.py`
-
   - [ ] `pytest tests/unit/test_arxiv_connector.py -v` → PASS
-
   **QA Scenarios:**
-
   ```
-
   Scenario: arXiv connector fetches real papers
-
     Tool: Bash
-
     Steps:
-
       1. curl -sf http://localhost:8000/api/v1/connectors/arxiv/fetch -H "Content-Type: application/json" -d '{"query": "cat:cs.AI", "max_results": 3}'
-
       2. Assert response has "items" array with length == 3
-
       3. Assert each item has: title, raw_text (abstract), source_url (arxiv link), author, published_at
-
     Expected Result: 3 arXiv papers fetched with metadata
-
     Evidence: .sisyphus/evidence/task-8-arxiv-fetch.json
-
   Scenario: arXiv connector respects rate limits
-
     Tool: Bash
-
     Steps:
-
       1. Run pytest test that makes 2 consecutive requests
-
       2. Assert >= 3 second delay between API calls (check timing in logs)
-
     Expected Result: Rate limit respected
-
     Evidence: .sisyphus/evidence/task-8-arxiv-rate-limit.txt
-
   ```
-
   **Commit**: YES
-
   - Message: `feat(connectors): arXiv connector with category search`
-
   - Files: `src/connectors/arxiv.py`, `tests/fixtures/arxiv_responses/`
-
   - Pre-commit: `pytest tests/unit/test_arxiv_connector.py -v`
-
 - [ ] 9. Gatekeeper Service — Ollama + Rule-Based Fallback
-
   **What to do**:
-
   - Create `src/services/gatekeeper.py`: `GatekeeperService`:
-
     - Primary: Sends content to local Qwen 1.5B via OllamaClient for binary classification (pass/reject)
-
     - Uses `prompts/gatekeeper.j2` template with content text
-
     - Parses response into `GatekeeperDecision` (pass/reject + reason + confidence)
-
     - Fallback (when Ollama unavailable): Rule-based filter:
-
       - Reject if: text length < 100 chars, detected language doesn't match user preferences, duplicate URL in DB
-
       - Pass otherwise with confidence=0.5 and reason="rule-based fallback"
-
     - Health check: ping Ollama before each batch, switch to fallback if unreachable
-
     - Log all decisions with structlog (content_id, decision, confidence, method: ollama/rule-based)
-
   - TDD: Write tests for both Ollama path (mocked) and rule-based path
-
   **Must NOT do**:
-
   - Do NOT implement complex NLP-based filtering (just LLM or rules)
-
   - Do NOT add content fingerprinting/SimHash (that's Task 22)
-
   **Recommended Agent Profile**:
-
   - **Category**: `deep`
-
     - Reason: Dual-path logic (LLM + fallback) with health checking requires careful design
-
   - **Skills**: []
-
   **Parallelization**:
-
   - **Can Run In Parallel**: YES (with T7, T8, T10-T12)
-
   - **Parallel Group**: Wave 0.2
-
   - **Blocks**: Task 13
-
   - **Blocked By**: Tasks 3, 4, 5
-
   **References**:
-
   **Pattern References**:
-
   - `DESIGN.md:186-205` — Gatekeeper design with criteria (substance, evidence, logic, not clickbait)
-
   - `src/llm/ollama.py` (from Task 4) — OllamaClient for LLM calls
-
   - `src/schemas/gatekeeper.py` (from Task 3) — GatekeeperDecision schema
-
   **WHY Each Reference Matters**:
-
   - DESIGN.md gatekeeper section defines the exact quality criteria — prompt must encode these
-
   - OllamaClient is the interface — gatekeeper consumes it, doesn't create its own HTTP calls
-
   **Acceptance Criteria**:
-
   **TDD:**
-
   - [ ] Test file: `tests/unit/test_gatekeeper.py`
-
   - [ ] `pytest tests/unit/test_gatekeeper.py -v` → PASS (mock Ollama pass, mock Ollama reject, fallback path)
-
   **QA Scenarios:**
-
   ```
-
   Scenario: Gatekeeper passes quality content via mock LLM
-
     Tool: Bash
-
     Steps:
-
       1. Run pytest with MockLLMClient returning pass decision
-
       2. Assert GatekeeperDecision.passed == True
-
       3. Assert decision has reason and confidence > 0.7
-
     Expected Result: Quality content passes gatekeeper
-
     Evidence: .sisyphus/evidence/task-9-gatekeeper-pass.txt
-
   Scenario: Gatekeeper falls back to rules when Ollama unavailable
-
     Tool: Bash
-
     Steps:
-
       1. Run pytest with OllamaClient configured to unreachable host
-
       2. Send content with text > 100 chars
-
       3. Assert falls back to rule-based: passed=True, confidence=0.5, reason contains "rule-based"
-
       4. Send content with text < 100 chars
-
       5. Assert rule-based rejects: passed=False
-
     Expected Result: Graceful fallback to rules
-
     Evidence: .sisyphus/evidence/task-9-gatekeeper-fallback.txt
-
   ```
-
   **Commit**: YES
-
   - Message: `feat(services): gatekeeper with Ollama + rule-based fallback`
-
   - Files: `src/services/gatekeeper.py`
-
   - Pre-commit: `pytest tests/unit/test_gatekeeper.py -v`
-
 - [ ] 10. Content Understanding Service — DeepSeek
-
   **What to do**:
-
   - Create `src/services/understanding.py`: `UnderstandingService`:
-
     - Takes gatekept content, sends to DeepSeek via `DeepSeekClient.complete_structured()`
-
     - Uses `prompts/understanding.j2` template
-
     - Extracts `ContentUnderstandingSchema` (Phase 0: summary, key_points, domains, estimated_read_time)
-
     - Structured output: Pydantic model validation on LLM response
-
     - Handles bilingual content (Chinese/English) — prompt instructs LLM to output in content's language
-
     - Retry on malformed JSON (re-prompt with "Please output valid JSON")
-
     - Stores result in Content DB row (summary, key_points, domains, estimated_read_time columns)
-
   - TDD: Write tests with fixture DeepSeek responses first
-
   **Must NOT do**:
-
   - Do NOT extract concepts, prerequisites, or content subgraph (Phase 2)
-
   - Do NOT implement content categorization beyond simple domains list
-
   - Do NOT add streaming
-
   **Recommended Agent Profile**:
-
   - **Category**: `deep`
-
     - Reason: LLM structured output parsing with retry logic, bilingual handling
-
   - **Skills**: []
-
   **Parallelization**:
-
   - **Can Run In Parallel**: YES (with T7-T9, T11, T12)
-
   - **Parallel Group**: Wave 0.2
-
   - **Blocks**: Task 13, 28
-
   - **Blocked By**: Tasks 3, 4, 5
-
   **References**:
-
   **Pattern References**:
-
   - `DESIGN.md:207-230` — ContentUnderstanding interface (Phase 0 uses 4 of 14 fields)
-
   - `src/llm/deepseek.py` (Task 4) — DeepSeekClient for API calls
-
   - `src/schemas/content.py` (Task 3) — ContentUnderstandingSchema
-
   **Acceptance Criteria**:
-
   **TDD:**
-
   - [ ] Test file: `tests/unit/test_understanding.py`
-
   - [ ] `pytest tests/unit/test_understanding.py -v` → PASS
-
   **QA Scenarios:**
-
   ```
-
   Scenario: Understanding extracts structured data from content
-
     Tool: Bash
-
     Steps:
-
       1. Run pytest with MockLLMClient returning fixture understanding JSON
-
       2. Assert ContentUnderstandingSchema parsed: summary (non-empty string), key_points (list, len >= 1), domains (list), estimated_read_time (int > 0)
-
     Expected Result: All 4 fields extracted and validated
-
     Evidence: .sisyphus/evidence/task-10-understanding.txt
-
   Scenario: Understanding retries on malformed JSON
-
     Tool: Bash
-
     Steps:
-
       1. Run pytest with MockLLMClient returning invalid JSON first, valid JSON second
-
       2. Assert retry triggered (check call count)
-
       3. Assert final result is valid ContentUnderstandingSchema
-
     Expected Result: Automatic retry on bad JSON
-
     Evidence: .sisyphus/evidence/task-10-retry.txt
-
   ```
-
   **Commit**: YES
-
   - Message: `feat(services): content understanding via DeepSeek`
-
   - Files: `src/services/understanding.py`
-
   - Pre-commit: `pytest tests/unit/test_understanding.py -v`
-
 - [ ] 11. Quality Scoring — Simple LLM Score
-
   **What to do**:
-
   - Create `src/services/scoring.py`: `ScoringService`:
-
     - Takes understood content (summary + key_points available)
-
     - Sends to DeepSeek via `DeepSeekClient.complete_structured()` with `prompts/quality_score.j2`
-
     - Returns `QualityScoreSchema`: single score (1-10) + reasoning text
-
     - Score criteria from prompt: substance (not fluff), density (info per word), credibility (evidence-backed), novelty (not common knowledge), actionability (can be applied)
-
     - Threshold: score >= 6 passes to indexing, score < 6 rejected
-
     - Stores score and reasoning in Content DB row
-
   - TDD: Write tests with fixture scoring responses
-
   **Must NOT do**:
-
   - Do NOT implement 7-dimension weighted formula (Phase 1, Task 19)
-
   - Do NOT implement social signal scoring or timeliness scoring
-
   - Do NOT cache scores
-
   **Recommended Agent Profile**:
-
   - **Category**: `quick`
-
     - Reason: Simple LLM call with single-value output — straightforward
-
   - **Skills**: []
-
   **Parallelization**:
-
   - **Can Run In Parallel**: YES (with T7-T10, T12)
-
   - **Parallel Group**: Wave 0.2
-
   - **Blocks**: Task 13, 19
-
   - **Blocked By**: Tasks 3, 4, 5
-
   **References**:
-
   **Pattern References**:
-
   - `DESIGN.md:399-432` — Quality scoring 7 dimensions (use as prompt guidance, not implementation)
-
   - `src/schemas/quality.py` (Task 3) — QualityScoreSchema
-
   **Acceptance Criteria**:
-
   **TDD:**
-
   - [ ] Test file: `tests/unit/test_scoring.py`
-
   - [ ] `pytest tests/unit/test_scoring.py -v` → PASS
-
   **QA Scenarios:**
-
   ```
-
   Scenario: Scoring returns valid score with reasoning
-
     Tool: Bash
-
     Steps:
-
       1. Run pytest with MockLLMClient returning score=8 + reasoning
-
       2. Assert QualityScoreSchema.score is 8, reasoning is non-empty
-
       3. Test threshold: score=8 >= 6 → passes, score=3 < 6 → rejected
-
     Expected Result: Score correctly parsed and threshold applied
-
     Evidence: .sisyphus/evidence/task-11-scoring.txt
-
   ```
-
   **Commit**: YES
-
   - Message: `feat(services): simple LLM quality scoring (1-10)`
-
   - Files: `src/services/scoring.py`
-
   - Pre-commit: `pytest tests/unit/test_scoring.py -v`
-
 - [ ] 12. Content Storage + Retrieval Service
-
   **What to do**:
-
   - Create `src/services/storage.py`: `ContentStorageService`:
-
     - CRUD operations for Content model (create, get_by_id, list, update_pipeline_status)
-
     - `store_raw(raw: RawContentSchema) -> Content` — creates DB row with pipeline_status=fetched
-
     - `update_gatekeeper_result(content_id, decision)` — updates status to gatekept/failed
-
     - `update_understanding(content_id, understanding)` — updates summary, key_points, domains
-
     - `update_score(content_id, score)` — updates quality_score, status to scored
-
     - `mark_indexed(content_id)` — updates status to indexed
-
     - `get_pending(stage: PipelineStatus) -> list[Content]` — get content waiting for a specific stage
-
     - `get_pushable(min_score: float, limit: int) -> list[Content]` — get indexed content above score threshold
-
     - URL dedup: check `source_url` uniqueness before insert (DB unique constraint + normalize URL)
-
   - Create `src/services/source.py`: `SourceService` — CRUD for Source model (add/remove/list RSS feeds and arXiv configs)
-
   - Create FastAPI routes: `src/api/v1/content.py` and `src/api/v1/sources.py`
-
   - TDD: Write storage tests against real test PostgreSQL (docker-compose.test.yml)
-
   **Must NOT do**:
-
   - Do NOT implement full-text search (Meilisearch, Phase 1)
-
   - Do NOT implement graph queries
-
   - Do NOT add pagination beyond simple limit/offset
-
   **Recommended Agent Profile**:
-
   - **Category**: `unspecified-high`
-
     - Reason: Multiple CRUD operations with status transitions, API routes, DB integration tests
-
   - **Skills**: []
-
   **Parallelization**:
-
   - **Can Run In Parallel**: YES (with T7-T11)
-
   - **Parallel Group**: Wave 0.2
-
   - **Blocks**: Tasks 13, 14, 20-22
-
   - **Blocked By**: Tasks 2, 3
-
   **References**:
-
   **Pattern References**:
-
   - `src/models/content.py` (Task 2) — Content SQLAlchemy model
-
   - `src/schemas/content.py` (Task 3) — Pydantic schemas for request/response
-
   - `Folo/packages/internal/database/src/services/` — Folo's service layer pattern (entry, feed, subscription services)
-
   **WHY Each Reference Matters**:
-
   - Content model defines DB columns — storage service wraps these with business logic
-
   - Folo services show a clean pattern: thin service layer over ORM with typed parameters
-
   **Acceptance Criteria**:
-
   **TDD:**
-
   - [ ] Test file: `tests/unit/test_storage.py`, `tests/integration/test_storage_db.py`
-
   - [ ] `pytest tests/unit/test_storage.py -v` → PASS
-
   - [ ] `pytest tests/integration/test_storage_db.py -v` → PASS (requires test DB)
-
   **QA Scenarios:**
-
   ```
-
   Scenario: Content CRUD lifecycle
-
     Tool: Bash
-
     Preconditions: API running with DB
-
     Steps:
-
       1. POST /api/v1/sources — create RSS source, assert 201
-
       2. POST /api/v1/connectors/rss/fetch — fetch content, assert items created
-
       3. GET /api/v1/content?status=fetched — assert items listed
-
       4. Assert each content has pipeline_status="fetched"
-
     Expected Result: Full create → list lifecycle works
-
     Evidence: .sisyphus/evidence/task-12-crud-lifecycle.json
-
   Scenario: URL dedup prevents duplicate content
-
     Tool: Bash
-
     Steps:
-
       1. Store content with source_url="https://example.com/article"
-
       2. Attempt to store same URL again
-
       3. Assert second attempt returns existing content (not duplicate)
-
     Expected Result: No duplicate entries for same URL
-
     Evidence: .sisyphus/evidence/task-12-url-dedup.txt
-
   ```
-
   **Commit**: YES
-
   - Message: `feat(services): content storage + retrieval + API routes`
-
   - Files: `src/services/storage.py`, `src/services/source.py`, `src/api/v1/`
-
   - Pre-commit: `pytest tests/ -v`
-
 - [ ] 13. Pipeline Orchestrator — State Machine + Celery Task Dispatch
 
   **What to do**:

@@ -1,6 +1,5 @@
 import { Button } from '@/components/ui/button';
 import { ThumbsUp, Clock, CheckCircle, ThumbsDown, HelpCircle, MessageCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface FeedbackBarProps {
   contentId: number;

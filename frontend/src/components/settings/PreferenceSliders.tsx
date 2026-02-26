@@ -25,23 +25,26 @@ export function PreferenceSliders() {
     try {
       const data = await apiClient.getPushPreferences(1);
       setPrefs(data);
-    } catch (error) {
+    } catch {
       toast.error("Failed to load preferences");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdate = (key: keyof PushPreferences, value: any) => {
+  const handleUpdate = <K extends keyof PushPreferences>(
+    key: K,
+    value: PushPreferences[K],
+  ) => {
     const newPrefs = { ...prefs, [key]: value };
     setPrefs(newPrefs);
 
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
     saveTimeout.current = setTimeout(async () => {
       try {
-        await apiClient.updatePushPreferences(1, { [key]: value });
+        await apiClient.updatePushPreferences(1, { [key]: value } as Partial<PushPreferences>);
         toast.success("Preferences saved");
-      } catch (error) {
+      } catch {
         toast.error("Failed to save preferences");
       }
     }, 800);

@@ -25,6 +25,9 @@ vi.mock('lucide-react', async () => {
 });
 
 describe('ContentDetailPage', () => {
+  const mockGetContentDetail = vi.mocked(apiClient.getContentDetail);
+  const mockSubmitFeedback = vi.mocked(apiClient.submitFeedback);
+
   const mockContent = {
     id: 1,
     title: 'Test Content',
@@ -60,7 +63,9 @@ describe('ContentDetailPage', () => {
   });
 
   it('renders loading state initially', () => {
-    (apiClient.getContentDetail as any).mockReturnValue(new Promise(() => {})); // Never resolves
+    mockGetContentDetail.mockReturnValue(
+      new Promise<never>(() => {}) as ReturnType<typeof apiClient.getContentDetail>
+    );
     render(<ContentDetailPage />);
     // Check for loader (using class or implicit role, better to use test id if loader had one, but we can check for emptiness or spinner)
     // Actually our loading state renders a div with Loader2. 
@@ -71,7 +76,7 @@ describe('ContentDetailPage', () => {
   });
 
   it('renders content successfully', async () => {
-    (apiClient.getContentDetail as any).mockResolvedValue(mockContent);
+    mockGetContentDetail.mockResolvedValue(mockContent);
     render(<ContentDetailPage />);
 
     await waitFor(() => {
@@ -86,7 +91,7 @@ describe('ContentDetailPage', () => {
   });
 
   it('renders original content with markdown', async () => {
-    (apiClient.getContentDetail as any).mockResolvedValue(mockContent);
+    mockGetContentDetail.mockResolvedValue(mockContent);
     render(<ContentDetailPage />);
 
     await waitFor(() => {
@@ -95,8 +100,8 @@ describe('ContentDetailPage', () => {
   });
 
   it('handles feedback submission', async () => {
-    (apiClient.getContentDetail as any).mockResolvedValue(mockContent);
-    (apiClient.submitFeedback as any).mockResolvedValue({});
+    mockGetContentDetail.mockResolvedValue(mockContent);
+    mockSubmitFeedback.mockResolvedValue(undefined);
     render(<ContentDetailPage />);
 
     await waitFor(() => {
@@ -110,7 +115,7 @@ describe('ContentDetailPage', () => {
   });
 
   it('handles API error gracefully', async () => {
-    (apiClient.getContentDetail as any).mockRejectedValue(new Error('API Error'));
+    mockGetContentDetail.mockRejectedValue(new Error('API Error'));
     render(<ContentDetailPage />);
 
     await waitFor(() => {

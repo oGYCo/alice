@@ -33,14 +33,25 @@ global.ResizeObserver = class ResizeObserver {
 };
 
 describe('Settings Components', () => {
+  const mockGetSources = vi.mocked(apiClient.getSources);
+  const mockCreateSource = vi.mocked(apiClient.createSource);
+  const mockGetPushPreferences = vi.mocked(apiClient.getPushPreferences);
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   // SourceManager Tests
   it('renders SourceManager and loads sources', async () => {
-    (apiClient.getSources as any).mockResolvedValue([
-      { id: 1, name: 'Test Source', url: 'http://example.com', type: 'rss' }
+    mockGetSources.mockResolvedValue([
+      {
+        id: 1,
+        name: 'Test Source',
+        url: 'http://example.com',
+        type: 'rss',
+        is_active: true,
+        created_at: '2023-01-01T00:00:00Z',
+      }
     ]);
 
     render(<SourceManager />);
@@ -52,8 +63,15 @@ describe('Settings Components', () => {
   });
 
   it('adds a new source', async () => {
-    (apiClient.getSources as any).mockResolvedValue([]);
-    (apiClient.createSource as any).mockResolvedValue({ id: 2, name: 'New', url: 'http://new.com', type: 'rss' });
+    mockGetSources.mockResolvedValue([]);
+    mockCreateSource.mockResolvedValue({
+      id: 2,
+      name: 'New',
+      url: 'http://new.com',
+      type: 'rss',
+      is_active: true,
+      created_at: '2023-01-01T00:00:00Z',
+    });
 
     render(<SourceManager />);
     
@@ -68,9 +86,14 @@ describe('Settings Components', () => {
 
   // PreferenceSliders Tests
   it('renders PreferenceSliders and loads prefs', async () => {
-    (apiClient.getPushPreferences as any).mockResolvedValue({
+    mockGetPushPreferences.mockResolvedValue({
+      user_id: 1,
+      quiet_start: 22,
+      quiet_end: 8,
+      preferred_types: [],
+      user_mode: 'daily',
       epsilon: 0.15,
-      max_per_day: 20
+      max_per_day: 20,
     });
 
     render(<PreferenceSliders />);
@@ -84,7 +107,14 @@ describe('Settings Components', () => {
 
   // ScheduleEditor Tests
   it('renders ScheduleEditor and loads schedule', async () => {
-    (apiClient.getPushPreferences as any).mockResolvedValue({
+    mockGetPushPreferences.mockResolvedValue({
+      user_id: 1,
+      quiet_start: 22,
+      quiet_end: 8,
+      preferred_types: [],
+      user_mode: 'daily',
+      epsilon: 0.1,
+      max_per_day: 10,
       schedule: {
         morning: { name: 'morning', start_time: '09:37', end_time: '11:00', is_enabled: true, max_pushes: 5 }
       }
@@ -100,8 +130,14 @@ describe('Settings Components', () => {
 
   // UserModeSelector Tests
   it('renders UserModeSelector and updates mode', async () => {
-    (apiClient.getPushPreferences as any).mockResolvedValue({
-      user_mode: 'daily'
+    mockGetPushPreferences.mockResolvedValue({
+      user_id: 1,
+      quiet_start: 22,
+      quiet_end: 8,
+      preferred_types: [],
+      user_mode: 'daily',
+      epsilon: 0.1,
+      max_per_day: 10,
     });
 
     render(<UserModeSelector />);

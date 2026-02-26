@@ -29,7 +29,7 @@ export function UserModeSelector() {
       const data = await apiClient.getPushPreferences(1);
       if (data.user_mode) setMode(data.user_mode);
       if (data.project_description) setProjectDesc(data.project_description);
-    } catch (error) {
+    } catch {
       toast.error("Failed to load user mode");
     } finally {
       setLoading(false);
@@ -40,7 +40,7 @@ export function UserModeSelector() {
     try {
       await apiClient.updatePushPreferences(1, updates);
       toast.success("Mode updated");
-    } catch (error) {
+    } catch {
       toast.error("Failed to save mode");
     }
   };

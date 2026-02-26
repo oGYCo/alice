@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
-import type { PushPreferences, ScheduleSlot, ScheduleSlotName } from "@/lib/types";
+import type { ScheduleSlot, ScheduleSlotName } from "@/lib/types";
 import { Clock } from "lucide-react";
 
 const DEFAULT_SCHEDULE: Record<ScheduleSlotName, ScheduleSlot> = {
@@ -32,7 +32,7 @@ export function ScheduleEditor() {
       if (data.schedule) {
         setSchedule({ ...DEFAULT_SCHEDULE, ...data.schedule });
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to load schedule");
     } finally {
       setLoading(false);
@@ -52,7 +52,7 @@ export function ScheduleEditor() {
       try {
         await apiClient.updatePushPreferences(1, { schedule: newSchedule });
         toast.success("Schedule updated");
-      } catch (error) {
+      } catch {
         toast.error("Failed to save schedule");
       }
     }, 800);

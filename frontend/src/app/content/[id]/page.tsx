@@ -9,8 +9,6 @@ import { ContentSubgraph } from '@/components/content/ContentSubgraph';
 import { OriginalContent } from '@/components/content/OriginalContent';
 import { FeedbackBar } from '@/components/content/FeedbackBar';
 import { Loader2, AlertCircle } from 'lucide-react';
-// import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-// import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function ContentDetailPage() {
   const params = useParams();
@@ -28,9 +26,9 @@ export default function ContentDetailPage() {
         const data = await apiClient.getContentDetail(id);
         setContent(data);
         setError(null);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to fetch content detail:', err);
-        setError(err.message || 'Failed to load content.');
+        setError(err instanceof Error ? err.message : 'Failed to load content.');
       } finally {
         setLoading(false);
       }

@@ -2,7 +2,7 @@
  * Tests for the Feed page component — renders items, handles loading, feedback.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import FeedPage from '@/app/feed/page';
 
 // Mock the API client
@@ -22,7 +22,7 @@ class MockIntersectionObserver {
   observe = vi.fn();
   unobserve = vi.fn();
   disconnect = vi.fn();
-  constructor(_callback: IntersectionObserverCallback) {}
+  constructor() {}
 }
 vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 
@@ -72,12 +72,13 @@ describe('FeedPage', () => {
     render(<FeedPage />);
 
     // Loading state should be visible before feed resolves
-    const skeletons = screen.queryAllByRole('article');
     // At minimum, the page renders without crashing in loading state
     expect(document.body).toBeTruthy();
 
     // Unblock the fetch
-    resolveFeed!(MOCK_ITEMS);
+    await act(async () => {
+      resolveFeed!(MOCK_ITEMS);
+    });
   });
 
   it('renders feed items after loading', async () => {

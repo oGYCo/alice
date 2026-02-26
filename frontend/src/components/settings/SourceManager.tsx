@@ -21,7 +21,7 @@ export function SourceManager() {
     try {
       const data = await apiClient.getSources();
       setSources(data);
-    } catch (error) {
+    } catch {
       toast.error("Failed to load sources");
     }
   };
@@ -35,7 +35,7 @@ export function SourceManager() {
       toast.success("Source added");
       setNewSource({ name: '', url: '', type: 'rss' });
       loadSources();
-    } catch (error) {
+    } catch {
       toast.error("Failed to add source");
     } finally {
       setLoading(false);
@@ -47,7 +47,7 @@ export function SourceManager() {
       await apiClient.deleteSource(id);
       toast.success("Source deleted");
       setSources(sources.filter(s => s.id !== id));
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete source");
     }
   };

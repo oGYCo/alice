@@ -30,6 +30,7 @@ dependencies = [
     "openai>=1.6.0",
     "ollama>=0.1.0",
     "meilisearch>=0.31.0",
+    "neo4j>=5.0",
 ]
 
 [project.optional-dependencies]

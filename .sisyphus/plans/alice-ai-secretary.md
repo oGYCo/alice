@@ -1938,7 +1938,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/bot/handlers/push.py`, `prompts/push_card.j2`
   - Pre-commit: `uv run pytest tests/unit/test_card_formatting.py -v`
 
-- [ ] 24. Time-Window Push Scheduling
+- [x] 24. Time-Window Push Scheduling
 
   **What to do**:
   - Create `src/services/scheduler.py`: `PushScheduler`:

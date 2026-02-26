@@ -360,3 +360,63 @@ def task_retry_failed(self) -> dict:
             return {"requeued": requeued}
 
     return asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# Push batch delivery
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="alice.pipeline.tasks.task_push_batch",
+    max_retries=3,
+    retry_backoff=True,
+)
+def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5) -> dict:
+    """Deliver a batch of indexed content to a Telegram user.
+
+    Reads:  content.pipeline_status == 'indexed', pushed_at IS NULL
+    Writes: content.pushed_at = now(UTC) for delivered items
+    Next:   terminal
+    """
+    from aiogram import Bot
+
+    from alice.config import settings
+    from alice.services.push import PushService
+
+    async def _run() -> dict:
+        async with AsyncSessionLocal() as session:
+            svc = PushService()
+            content_list = await svc.get_next_push_batch(session, user_id=user_id, limit=limit)
+
+            if not content_list:
+                logger.info(
+                    "push_batch_empty",
+                    extra={"user_id": user_id},
+                )
+                return {"user_id": user_id, "delivered": 0}
+
+            try:
+                bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+                await svc.deliver_push(
+                    bot=bot,
+                    user_id=user_id,
+                    chat_id=chat_id,
+                    content_list=content_list,
+                    session=session,
+                )
+            except Exception as exc:
+                logger.error(
+                    "push_batch_error",
+                    extra={"user_id": user_id, "error": str(exc)},
+                )
+                raise self.retry(exc=exc)
+
+            logger.info(
+                "push_batch_complete",
+                extra={"user_id": user_id, "delivered": len(content_list)},
+            )
+            return {"user_id": user_id, "delivered": len(content_list)}
+
+    return asyncio.run(_run())

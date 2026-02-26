@@ -1244,7 +1244,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/pipeline/orchestrator.py`, `src/pipeline/tasks.py`, `src/pipeline/scheduler.py`
   - Pre-commit: `uv run pytest tests/unit/test_orchestrator.py tests/unit/test_pipeline_tasks.py -v`
 
-- [ ] 14. Telegram Bot — aiogram + Feedback Handler
+- [x] 14. Telegram Bot — aiogram + Feedback Handler
 
   **What to do**:
   - Create `src/bot/main.py`: aiogram bot (webhook mode, port 8081, separate Docker service)
@@ -1323,7 +1323,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/bot/main.py`, `src/bot/handlers/`
   - Pre-commit: `uv run pytest tests/unit/test_bot_handlers.py tests/unit/test_bot_feedback.py -v`
 
-- [ ] 15. Celery Beat Scheduling + Source Management API
+- [x] 15. Celery Beat Scheduling + Source Management API
 
   **What to do**:
   - Create `src/api/v1/sources.py`: Source CRUD endpoints:

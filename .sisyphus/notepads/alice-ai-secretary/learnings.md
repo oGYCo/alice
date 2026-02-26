@@ -485,3 +485,58 @@ Next: Task 5 (Content Cleaners) can use `LLMClient` protocol for formatting deci
 
 ### ruff clean on new files
 - Pre-existing `test_source_api.py` had 11 ruff F821 errors (unrelated, not my files) — scoped ruff check to `src/alice/bot/` only for task verification
+
+## [2026-02-26] Task 15: Source API + Beat Scheduling
+
+### FastAPI Dependency Overrides Pattern
+- `patch("module._get_source_service", ...)` does NOT work — FastAPI resolves deps at startup
+- CORRECT: `app.dependency_overrides[_get_source_service] = lambda: mock_svc`
+- Must import `_get_source_service` from the router module to use as the override key
+- `TestClient(app)` used as context manager for clean lifecycle
+
+### SourceService.update_source() Pattern
+- Accept `**kwargs` for flexibility; map `enabled` → `is_active` inside the method
+- Use `model_dump(exclude_unset=True)` in the router to only pass fields the client sent
+- Raises `ValueError` on not-found; router catches and converts to 404
+
+### Scheduler: Static + Dynamic Beat
+- `BEAT_SCHEDULE` dict stays as module-level static fallback (no DB needed at import time)
+- `get_dynamic_schedule(session)` is async, reads DB, returns merged dict
+- Each source: `fetch_interval_minutes * 60 + random.randint(0, 5) * 60` seconds
+- Per-source key: `"fetch-source-{id}"`, passes `kwargs={"source_id": id}`
+- Tests patch `alice.pipeline.scheduler.random.randint` to control jitter deterministically
+
+### SourceUpdateSchema
+- All fields `| None = None` for partial updates
+- `fetch_interval_minutes: int | None = Field(default=None, ge=5, le=1440)`
+- Lives in `src/alice/schemas/source.py` alongside existing schemas
+
+### DELETE returning 204
+- FastAPI: annotate return as `-> Response` and `return Response(status_code=204)`
+- Do NOT return `None` (causes 200 with null body by default if response_model is set)
+- With `status_code=204` on the decorator and explicit `Response(status_code=204)`, works correctly
+
+
+## [2026-02-26] Task 16: Push Service
+
+### What was built
+- `src/alice/services/push.py` — `PushService` with 3 methods:
+  - `get_next_push_batch(session, user_id, limit=5)` — queries `pipeline_status=indexed AND pushed_at IS NULL`, orders by `quality_score DESC`
+  - `format_push_card(content)` — renders `prompts/push_card.j2` via `PromptManager.render()`
+  - `deliver_push(bot, user_id, chat_id, content_list, session)` — calls `send_push()` per item, stamps `pushed_at`, commits once
+- `prompts/push_card.j2` — Jinja2 template: separator, read time, title, summary, key_points bullets, source URL
+- `tests/unit/test_push_service.py` — 16 tests (TDD RED→GREEN)
+- `src/alice/pipeline/tasks.py` — added `task_push_batch(user_id, chat_id, limit=5)` Celery task
+- `src/alice/api/v1/pipeline.py` — added `POST /api/v1/push/trigger` + `GET /api/v1/push/preview?content_id={id}`
+- `src/alice/main.py` — registered pipeline router
+- `src/alice/models/content.py` — added `pushed_at: Mapped[datetime | None]` field
+- `alembic/versions/01a7e7d9a52f_add_pushed_at_to_content.py` — migration for `pushed_at` column
+
+### Key Findings
+- `Content` model didn't have `pushed_at` field — had to add it to model + migration (alembic autogenerate broken in this env, created manually)
+- `pipeline.py` router was NOT registered in `main.py` — registered it as part of this task
+- `deliver_push` takes `Bot` (typed) not `object` — basedpyright errors caught this; fixed by importing `Bot` in push.py
+- `ContentResponseSchema` doesn't have `pushed_at` — that's correct (response schema is for API consumers, not internal state)
+- `send_push()` signature: `async def send_push(*, bot: Bot, chat_id: int, content: ContentResponseSchema)` — must pass schema, not ORM model
+- Task 16 does NOT implement P_score, time-window scheduling, or ε-greedy (Phase 1/4)
+- Test count: 187 (before) → 203 (after), all pass

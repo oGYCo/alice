@@ -136,3 +136,50 @@ async def retry_content(
     await storage.update_pipeline_status(content_id, PipelineStatus.fetched)
     task_run_gatekeeper.delay(content_id)
     return {"content_id": content_id, "status": "queued"}
+
+
+# ---------------------------------------------------------------------------
+# Push endpoints
+# ---------------------------------------------------------------------------
+
+
+class PushTriggerRequest(BaseModel):
+    user_id: int
+    chat_id: int
+    limit: int = 5
+
+
+@router.post("/push/trigger", status_code=202)
+async def trigger_push(
+    body: PushTriggerRequest,
+) -> Any:
+    """Trigger a push batch delivery for a user.
+
+    Dispatches task_push_batch as a background Celery task.
+    Returns 202 Accepted immediately.
+    """
+    from alice.pipeline.tasks import task_push_batch
+
+    task_push_batch.delay(body.user_id, body.chat_id, body.limit)
+    return {"user_id": body.user_id, "chat_id": body.chat_id, "status": "queued"}
+
+
+@router.get("/push/preview")
+async def preview_push_card(
+    content_id: int,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Any:
+    """Return the formatted push card text for a content item.
+
+    Useful for testing card rendering without delivering to Telegram.
+    """
+    from alice.services.push import PushService
+
+    storage = ContentStorageService(session)
+    content = await storage.get_by_id(content_id)
+    if content is None:
+        raise HTTPException(status_code=404, detail=f"Content {content_id} not found")
+
+    svc = PushService()
+    card_text = svc.format_push_card(content)
+    return {"content_id": content_id, "card_text": card_text}

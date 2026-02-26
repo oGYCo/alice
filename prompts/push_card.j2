@@ -1,0 +1,14 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━
+{% if estimated_read_time %}📚 预计阅读 {{ estimated_read_time }} 分钟{% else %}📚 内容推送{% endif %}
+
+*{{ title | default("(无标题)") }}*
+
+┈┈ 核心内容 ┈┈
+{{ summary | default("") }}
+
+{% if key_points %}┈┈ 关键要点 ┈┈
+{% for point in key_points %}• {{ point }}
+{% endfor %}
+{% endif %}🔗 [原文链接]({{ source_url }})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━

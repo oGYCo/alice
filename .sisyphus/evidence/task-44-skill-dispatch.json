@@ -1,0 +1,17 @@
+{
+  "skill_dispatch": {
+    "positive_feedback": "update_knowledge_graph",
+    "negative_feedback": "adjust_preferences",
+    "too_hard": "calibrate_difficulty",
+    "explore_new_topic": "discover_interest",
+    "weekly_cron": "periodic_self_review"
+  },
+  "tests_passed": 28,
+  "all_skills": [
+    "update_knowledge_graph",
+    "adjust_preferences",
+    "calibrate_difficulty",
+    "discover_interest",
+    "periodic_self_review"
+  ]
+}

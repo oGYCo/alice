@@ -1,0 +1,7 @@
+{
+  "high_negative_ratio_detected": true,
+  "too_hard_drift_detected": true,
+  "knowledge_gaps_deduped": true,
+  "diff_summary_includes_engagement": true,
+  "no_history_returns_no_drift": true
+}

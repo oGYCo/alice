@@ -1,0 +1,47 @@
+skills:
+  update_knowledge_graph:
+    trigger:
+      - positive_feedback
+      - learned_new
+    actions:
+      - extract_concepts_from_content
+      - update_mastery_scores
+      - add_new_edges_if_discovered
+
+  adjust_preferences:
+    trigger:
+      - negative_feedback
+      - already_known
+    actions:
+      - analyze_mismatch_reason
+      - update_source_weights
+      - update_topic_weights
+      - log_to_feedback_history
+
+  calibrate_difficulty:
+    trigger:
+      - too_hard
+      - too_easy
+      - explain_concept
+    actions:
+      - reassess_user_mastery
+      - recalculate_prerequisite_gaps
+      - adjust_content_difficulty_range
+
+  discover_interest:
+    trigger:
+      - explore_new_topic
+      - positive_on_unexpected
+    actions:
+      - add_new_interest_node
+      - expand_connector_subscriptions
+      - schedule_introductory_content
+
+  periodic_self_review:
+    trigger:
+      - weekly_cron
+    actions:
+      - review_feedback_statistics
+      - detect_preference_drift
+      - identify_knowledge_gaps
+      - generate_user_model_diff_report

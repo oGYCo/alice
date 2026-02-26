@@ -1,0 +1,8 @@
+{
+  "scenario": "schedule_after_positive_rating",
+  "old_stability": 5.0,
+  "new_stability": 7.841560927450844,
+  "stability_increased": true,
+  "due_date_days_from_now": 7.8415609261921295,
+  "due_after_tomorrow": true
+}

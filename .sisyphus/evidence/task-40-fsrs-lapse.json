@@ -1,0 +1,9 @@
+{
+  "scenario": "lapse_to_relearning",
+  "new_state": "relearning",
+  "is_relearning": true,
+  "lapses_incremented": true,
+  "stability_decreased": true,
+  "old_stability": 5.0,
+  "new_stability": 2.5
+}

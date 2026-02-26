@@ -1,4 +1,4 @@
-import type { ContentItem, Source, SearchResult, PushPreferences } from './types';
+import type { ContentItem, ContentDetail, Source, SearchResult, PushPreferences } from './types';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -29,6 +29,10 @@ export class AliceApiClient {
     return this.request(`/api/v1/content?limit=${limit}&offset=${offset}`);
   }
 
+  async getContentDetail(id: number): Promise<ContentDetail> {
+    return this.request(`/api/v1/content/${id}`);
+  }
+
   async searchContent(q: string, limit = 20, offset = 0): Promise<SearchResult> {
     return this.request(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`);
   }
@@ -49,6 +53,25 @@ export class AliceApiClient {
 
   async getPushPreferences(userId: number): Promise<PushPreferences> {
     return this.request(`/api/v1/settings/push?user_id=${userId}`);
+  }
+  async createSource(data: { name: string; url: string; type: string }): Promise<Source> {
+    return this.request('/api/v1/sources', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSource(id: number): Promise<void> {
+    return this.request(`/api/v1/sources/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updatePushPreferences(userId: number, prefs: Partial<PushPreferences>): Promise<PushPreferences> {
+    return this.request(`/api/v1/settings/push?user_id=${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    });
   }
 
   async healthCheck(): Promise<{ status: string }> {

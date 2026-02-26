@@ -516,7 +516,6 @@ Next: Task 5 (Content Cleaners) can use `LLMClient` protocol for formatting deci
 - Do NOT return `None` (causes 200 with null body by default if response_model is set)
 - With `status_code=204` on the decorator and explicit `Response(status_code=204)`, works correctly
 
-
 ## [2026-02-26] Task 16: Push Service
 
 ### What was built
@@ -548,3 +547,20 @@ Next: Task 5 (Content Cleaners) can use `LLMClient` protocol for formatting deci
 - Structured ContentCard with grid/list view support using Tailwind flex utilities for responsive layout.
 - Added `getFeed` and `submitFeedback` methods to `AliceApiClient` for backend integration.
 - Verified components with Vitest unit tests, ensuring robust rendering and interaction handling.
+
+## Frontend Settings Implementation (Phase 0 Task 36)
+- **Testing Shadcn/Radix UI**: Requires `ResizeObserver` polyfill in JSDOM environment. Added to global scope in tests.
+- **Async Component Testing**: Components that fetch on mount require `waitFor` before asserting presence of elements, as they might render a loading state initially.
+- **State Management**: Merging remote data with local defaults (e.g., for Schedule slots) ensures UI consistency even if API returns partial data.
+- **Mocking**: Mocked `@/lib/api` module to isolate components from backend.
+
+## T35: Content Detail Page Implementation
+- Implemented Content Detail page using Next.js App Router client component pattern with `useParams` and `useEffect`.
+- **Graph Visualization**: Implemented a lightweight SVG-based node-link diagram for `ContentSubgraph` without external graph libraries (like D3 or React Flow), using a simple circular layout calculation in `useMemo`. This avoids heavy dependencies for simple visualizations.
+- **Markdown Rendering**: Used `react-markdown` with `rehype-highlight` for rendering original content.
+- **Styling**: Used `shadcn/ui` components and `tailwindcss`.
+- **Testing**:
+  - Mocked `next/navigation`'s `useParams` to test dynamic routes.
+  - Mocked `apiClient` to avoid network requests.
+  - Encountered issue with `Button` component not supporting `asChild` prop (likely a simplified version), resolved by using `buttonVariants` on `<a>` tags directly.
+  - Handled `lucide-react` icons in tests (they render as SVGs which is fine).

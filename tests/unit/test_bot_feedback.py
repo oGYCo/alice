@@ -14,7 +14,8 @@ from alice.schemas.feedback import FeedbackType
 
 def _make_session_cm():
     """Return (cm, session) async context manager mock pair."""
-    session = AsyncMock()
+    session = MagicMock()
+    session.commit = AsyncMock()  # commit is awaited
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=session)
     cm.__aexit__ = AsyncMock(return_value=False)

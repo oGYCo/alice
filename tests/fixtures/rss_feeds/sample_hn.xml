@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Hacker News Front Page</title>
+    <link>https://news.ycombinator.com/</link>
+    <description>Hacker News RSS feed</description>
+    <item>
+      <title>Example Post One</title>
+      <link>https://example.com/post-one?utm_source=hn&amp;utm_campaign=test</link>
+      <guid>https://example.com/post-one</guid>
+      <pubDate>Thu, 26 Feb 2026 10:00:00 GMT</pubDate>
+      <author>alice@example.com (Alice)</author>
+      <description>Summary for post one.</description>
+    </item>
+    <item>
+      <title>Example Post One (duplicate)</title>
+      <link>https://example.com/post-one?utm_medium=feed&amp;fbclid=abcd</link>
+      <guid>https://example.com/post-one#dup</guid>
+      <pubDate>Thu, 26 Feb 2026 10:05:00 GMT</pubDate>
+      <author>alice@example.com (Alice)</author>
+      <description>Duplicate summary for post one.</description>
+    </item>
+  </channel>
+</rss>

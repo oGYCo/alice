@@ -1,0 +1,29 @@
+[
+  {
+    "entry_id": "https://arxiv.org/abs/2301.00001",
+    "title": "Attention Is All You Need: Revisited",
+    "summary": "We revisit the transformer architecture and propose several improvements that significantly reduce training time while maintaining model quality on standard benchmarks.",
+    "pdf_url": "https://arxiv.org/pdf/2301.00001",
+    "authors": ["Alice Smith", "Bob Jones"],
+    "published": "2023-01-01T00:00:00Z",
+    "categories": ["cs.AI", "cs.LG"]
+  },
+  {
+    "entry_id": "https://arxiv.org/abs/2302.00002",
+    "title": "Scaling Language Models: Methods, Analysis and Insights from Training Gopher",
+    "summary": "We present an analysis of large language model training dynamics, focusing on the relationship between model size, dataset size, and compute budget for optimal performance.",
+    "pdf_url": "https://arxiv.org/pdf/2302.00002",
+    "authors": ["Charlie Brown", "Diana Prince", "Evan Turner"],
+    "published": "2023-02-01T00:00:00Z",
+    "categories": ["cs.AI", "cs.CL"]
+  },
+  {
+    "entry_id": "https://arxiv.org/abs/2303.00003",
+    "title": "Chain-of-Thought Prompting Elicits Reasoning in Large Language Models",
+    "summary": "We explore how chain-of-thought prompting, where a few chain of thought demonstrations are provided as exemplars in prompting, can substantially boost the ability of large language models to perform complex reasoning.",
+    "pdf_url": "https://arxiv.org/pdf/2303.00003",
+    "authors": ["Frank Miller"],
+    "published": "2023-03-15T00:00:00Z",
+    "categories": ["cs.AI", "cs.CL", "cs.LG"]
+  }
+]

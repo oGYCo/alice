@@ -806,7 +806,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Pre-commit: `uv run pytest tests/unit/test_worker.py -v`
 #### Wave 0.2 — Connectors + Gatekeeper (MAX PARALLEL after Wave 0.1)
 
-- [ ] 7. RSS/Atom Connector with Full-Text Extraction
+- [x] 7. RSS/Atom Connector with Full-Text Extraction
   **What to do**:
   - Create `src/connectors/base.py`: `BaseConnector` ABC with `async def fetch(config: SourceConfigSchema) -> list[RawContentSchema]`
   - Create `src/connectors/rss.py`: `RSSConnector(BaseConnector)`:
@@ -878,7 +878,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/connectors/`, `tests/fixtures/rss_feeds/`
   - Pre-commit: `uv run pytest tests/unit/test_rss_connector.py -v`
 
-- [ ] 8. arXiv Connector
+- [x] 8. arXiv Connector
   **What to do**:
   - Create `src/connectors/arxiv.py`: `ArxivConnector(BaseConnector)`:
     - Uses `arxiv` Python package to search by category (cs.AI, cs.LG, etc.) or keyword
@@ -933,7 +933,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(connectors): arXiv connector with category search`
   - Files: `src/connectors/arxiv.py`, `tests/fixtures/arxiv_responses/`
   - Pre-commit: `uv run pytest tests/unit/test_arxiv_connector.py -v`
-- [ ] 9. Gatekeeper Service — Ollama + Rule-Based Fallback
+- [x] 9. Gatekeeper Service — Ollama + Rule-Based Fallback
   **What to do**:
   - Create `src/services/gatekeeper.py`: `GatekeeperService`:
     - Primary: Sends content to local Qwen 1.5B via OllamaClient for binary classification (pass/reject)
@@ -994,7 +994,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(services): gatekeeper with Ollama + rule-based fallback`
   - Files: `src/services/gatekeeper.py`
   - Pre-commit: `uv run pytest tests/unit/test_gatekeeper.py -v`
-- [ ] 10. Content Understanding Service — DeepSeek
+- [x] 10. Content Understanding Service — DeepSeek
   **What to do**:
   - Create `src/services/understanding.py`: `UnderstandingService`:
     - Takes gatekept content, sends to DeepSeek via `DeepSeekClient.complete_structured()`
@@ -1049,7 +1049,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(services): content understanding via DeepSeek`
   - Files: `src/services/understanding.py`
   - Pre-commit: `uv run pytest tests/unit/test_understanding.py -v`
-- [ ] 11. Quality Scoring — Simple LLM Score
+- [x] 11. Quality Scoring — Simple LLM Score
   **What to do**:
   - Create `src/services/scoring.py`: `ScoringService`:
     - Takes understood content (summary + key_points available)
@@ -1095,7 +1095,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Message: `feat(services): simple LLM quality scoring (1-10)`
   - Files: `src/services/scoring.py`
   - Pre-commit: `uv run pytest tests/unit/test_scoring.py -v`
-- [ ] 12. Content Storage + Retrieval Service
+- [x] 12. Content Storage + Retrieval Service
   **What to do**:
   - Create `src/services/storage.py`: `ContentStorageService`:
     - CRUD operations for Content model (create, get_by_id, list, update_pipeline_status)

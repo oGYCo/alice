@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Tech Updates</title>
+  <link href="https://example.org/" />
+  <updated>2026-02-26T12:30:00Z</updated>
+  <id>https://example.org/</id>
+  <entry>
+    <title>Atom Entry One</title>
+    <link href="https://example.org/atom-entry" />
+    <id>tag:example.org,2026:1</id>
+    <updated>2026-02-26T12:30:00Z</updated>
+    <author>
+      <name>Bob</name>
+    </author>
+    <summary>Atom summary text.</summary>
+  </entry>
+  <entry>
+    <title>Entry Without Link</title>
+    <id>tag:example.org,2026:2</id>
+    <updated>2026-02-26T12:40:00Z</updated>
+    <summary>Missing link, should be skipped.</summary>
+  </entry>
+</feed>

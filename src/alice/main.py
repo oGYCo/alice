@@ -1,9 +1,13 @@
 """FastAPI application factory and main entry point."""
 
-from fastapi import FastAPI
+from fastapi import FastAPI  # type: ignore[import-not-found]
 
 from alice.config import settings
 from alice.logging import setup_logging
+
+from .api.v1.connectors import router as connectors_router
+from .api.v1.content import router as content_router
+from .api.v1.sources import router as sources_router
 
 
 def create_app() -> FastAPI:
@@ -17,6 +21,10 @@ def create_app() -> FastAPI:
         version="0.1.0",
         debug=settings.DEBUG,
     )
+
+    app.include_router(content_router, prefix="/api/v1")
+    app.include_router(sources_router, prefix="/api/v1")
+    app.include_router(connectors_router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():

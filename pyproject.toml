@@ -51,6 +51,9 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+    "integration: marks tests requiring a real database (deselect with '-m not integration')",
+]
 
 [tool.ruff]
 line-length = 100

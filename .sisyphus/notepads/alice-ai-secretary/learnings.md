@@ -363,3 +363,60 @@ Next: Task 5 (Content Cleaners) can use `LLMClient` protocol for formatting deci
 - API endpoints can fetch/update Content, Source, User, Feedback
 - Celery tasks can insert pipeline results directly to DB
 
+## [2026-02-26] Task 10: Understanding Service ✓
+
+### Implementation Summary
+- Added `UnderstandingService` to render the understanding prompt, call the LLM, parse JSON, and log `domains` plus `estimated_read_time`.
+- Implemented single retry on JSON decode failure with a strict JSON re-prompt.
+
+### Tests
+- Added unit tests covering fixture parsing, retry success, retry failure, and Chinese content.
+- `uv run pytest tests/unit/test_understanding.py -v` → 4 passed
+
+## Task 12: Content Storage + Retrieval Service (2026-02-26)
+
+### SQLAlchemy async patterns confirmed
+- `result.scalars().all()` returns `Sequence[T]` not `list[T]` — wrap with `list()` or use `Sequence` return type
+- `result.scalar_one_or_none()` for single-row lookups
+- Both work fine with `AsyncMock` in unit tests
+
+### Unit test mock pattern for SQLAlchemy ORM models
+- `Content.__new__(Content)` bypasses ORM `__init__` → `_sa_instance_state` missing → attribute setters blow up
+- **Correct approach**: `MagicMock(spec=Content)` + `setattr()` for each attribute
+- This lets attribute mutations work in tests without a real DB session
+
+### URL normalization via urllib.parse
+- `urlparse` / `urlunparse` cleanly handles scheme, netloc, path, query
+- `parse_qs(keep_blank_values=True)` + filter utm_* + `urlencode(doseq=True)` to clean query params
+- Strip www. from netloc after lowercasing
+
+### FastAPI router return type annotations
+- FastAPI `response_model=` handles serialization — route functions return ORM objects
+- basedpyright complains about `list[ORM] != list[Schema]` mismatch
+- Solution: annotate route return type as `Any` (FastAPI uses `response_model` at runtime)
+
+### Integration test skip pattern
+- Module-level `pytest.skip(..., allow_module_level=True)` is the correct approach
+- Module-scoped async fixtures (like `engine`) execute BEFORE function-scoped fixtures → `autouse` skip doesn't help
+- `if not TEST_DATABASE_URL: pytest.skip(...)` at module level works perfectly
+
+### services/__init__.py
+- Had stale `from .gatekeeper import GatekeeperService` import (gatekeeper.py doesn't exist yet)
+- Fixed to only export `ContentStorageService` and `SourceService`
+
+### Custom pytest markers
+- Must register in `[tool.pytest.ini_options] markers = [...]` in pyproject.toml to avoid `PytestUnknownMarkWarning`
+- Added `integration` marker registration
+
+
+## ArXiv Connector (Task: Phase 0)
+- `arxiv` package API: `arxiv.Client().results(arxiv.Search(query=..., max_results=..., sort_by=...))` returns a generator — wrap in `list()` inside executor
+- Blocking arxiv calls go in `run_in_executor(None, ...)` — the closure captures `config.url` and `max_results` from outer scope cleanly
+- `arxiv.Author` mock gotcha: `MagicMock(name=...)` is special in unittest.mock — set `.name` attribute AFTER construction: `mock.name = value`
+- `SourceConfigSchema.type` has regex `^(rss|arxiv)$` — must pass `type="arxiv"` in tests
+- ruff UP017: use `datetime.UTC` (Python 3.11+) instead of `timezone.utc` — this project targets Python 3.14
+- ruff I001: relative imports must come after absolute stdlib/third-party in sorted order (`.base` after `..schemas`)
+- Connector pattern: `fetched_at = datetime.now(UTC)` set once before loop, not per-item
+## [2026-02-26] Task 11: Quality Scoring Service
+- Added ScoringService to render quality_score prompt, parse JSON, retry once on invalid JSON, and log scoring_complete with score + passes_threshold.
+- Added unit tests covering fixture parsing, threshold boundaries (6.0/5.9), retry success, and retry failure.

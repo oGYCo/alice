@@ -2913,7 +2913,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `frontend/src/app/settings/page.tsx`, `frontend/src/components/settings/*.tsx`
   - Pre-commit: `cd frontend && npx vitest run src/components/settings`
 
-- [ ] 37. Knowledge Graph Update on User Feedback
+- [x] 37. Knowledge Graph Update on User Feedback
 
   **What to do**:
   - Implement `src/services/kg_updater.py` — KG update triggered by feedback:

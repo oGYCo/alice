@@ -1390,7 +1390,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/api/v1/sources.py`, `src/api/v1/pipeline.py`, `src/pipeline/scheduler.py`
   - Pre-commit: `uv run pytest tests/unit/test_source_api.py tests/unit/test_scheduler.py -v`
 
-- [ ] 16. Telegram Push Service — Content Delivery
+- [x] 16. Telegram Push Service — Content Delivery
 
   **What to do**:
   - Create `src/services/push.py`: `PushService`:
@@ -1458,7 +1458,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/push.py`, `prompts/push_card.j2`
   - Pre-commit: `uv run pytest tests/unit/test_push_service.py -v`
 
-- [ ] 17. Phase 0 Integration Tests + E2E Smoke Test
+- [x] 17. Phase 0 Integration Tests + E2E Smoke Test
 
   **What to do**:
   - Create `tests/integration/test_phase0_e2e.py`: End-to-end pipeline test:
@@ -1534,7 +1534,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `tests/integration/`, `scripts/smoke_test.sh`
   - Pre-commit: `uv run pytest tests/ -v`
 
-- [ ] 18. Update DESIGN.md — Fix 9 Identified Inconsistencies
+- [x] 18. Update DESIGN.md — Fix 9 Identified Inconsistencies
 
   **What to do**:
   Fix these 9 inconsistencies identified during planning:
@@ -1597,7 +1597,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
 ### Phase 1 — Intelligence Layer
 
-- [ ] 19. 7-Dimension Quality Scoring Formula
+- [x] 19. 7-Dimension Quality Scoring Formula
 
   **What to do**:
   - Replace simple LLM score (T11) with multi-dimension weighted scoring:
@@ -1804,7 +1804,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/search.py`, `docker-compose.yml`
   - Pre-commit: `uv run pytest tests/unit/test_search_service.py -v`
 
-- [ ] 22. Content Deduplication — URL Normalization + SimHash
+- [x] 22. Content Deduplication — URL Normalization + SimHash
 
   **What to do**:
   - Create `src/services/dedup.py`: `DeduplicationService`:
@@ -1870,7 +1870,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/dedup.py`, `src/utils/url.py`
   - Pre-commit: `uv run pytest tests/unit/test_dedup.py -v`
 
-- [ ] 23. Enhanced Telegram Card Formatting
+- [x] 23. Enhanced Telegram Card Formatting
 
   **What to do**:
   - Enhance `src/bot/handlers/push.py` and `prompts/push_card.j2`:
@@ -2062,7 +2062,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/api/v1/search.py`
   - Pre-commit: `uv run pytest tests/unit/test_search_api.py -v`
 
-- [ ] 26. Phase 1 Integration Tests
+- [x] 26. Phase 1 Integration Tests
 
   **What to do**:
   - Create `tests/integration/test_phase1_e2e.py`:
@@ -2124,7 +2124,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 
 ### Phase 2 — Knowledge Engine
 
-- [ ] 27. Neo4j Setup + Schema + Python Driver
+- [x] 27. Neo4j Setup + Schema + Python Driver
 
   **What to do**:
   - Add Neo4j service to `docker-compose.yml` (ports 7474 browser, 7687 bolt)
@@ -2200,7 +2200,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/graph/`, `docker-compose.yml`
   - Pre-commit: `uv run pytest tests/unit/test_graph_client.py -v`
 
-- [ ] 28. Content Subgraph Generation via LLM
+- [x] 28. Content Subgraph Generation via LLM
 
   **What to do**:
   - Create `src/graph/extractor.py`: `SubgraphExtractor`:
@@ -2273,7 +2273,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/graph/extractor.py`, `prompts/extract_subgraph.j2`
   - Pre-commit: `uv run pytest tests/unit/test_subgraph_extractor.py -v`
 
-- [ ] 29. Next.js Project Scaffolding + API Client
+- [x] 29. Next.js Project Scaffolding + API Client
 
   **What to do**:
   - Create `frontend/` directory with Next.js 14 App Router:
@@ -2337,7 +2337,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `frontend/`
   - Pre-commit: `cd frontend && npm run lint && npm run build`
 
-- [ ] 30. Next.js Auth + Layout Shell (Folo Two-Column Pattern)
+- [x] 30. Next.js Auth + Layout Shell (Folo Two-Column Pattern)
 
   **What to do**:
   - Create `frontend/src/app/layout.tsx`: Root layout:
@@ -2473,7 +2473,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/graph/user_kg.py`, `src/api/v1/knowledge.py`
   - Pre-commit: `uv run pytest tests/unit/test_user_kg.py -v`
 
-- [ ] 32. Content-User Matching Algorithm
+- [x] 32. Content-User Matching Algorithm
 
   **What to do**:
   - Create `src/services/matching.py`: `MatchingService`:
@@ -2547,7 +2547,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/matching.py`
   - Pre-commit: `uv run pytest tests/unit/test_matching.py -v`
 
-- [ ] 33. GraphRAG Hybrid Query Engine
+- [x] 33. GraphRAG Hybrid Query Engine
 
   **What to do**:
   - Implement `src/services/graphrag_query.py` — unified query layer combining three retrieval modes:
@@ -2643,7 +2643,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `src/services/graphrag_query.py`, `tests/unit/test_graphrag_query.py`
   - Pre-commit: `uv run pytest tests/unit/test_graphrag_query.py -v`
 
-- [ ] 34. Feed View Page — Card List with Grid/List Toggle
+- [x] 34. Feed View Page — Card List with Grid/List Toggle
 
   **What to do**:
   - Implement `frontend/src/app/feed/page.tsx` — main feed page showing content cards
@@ -2752,7 +2752,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `frontend/src/app/feed/page.tsx`, `frontend/src/components/feed/ContentCard.tsx`, `frontend/src/components/feed/FeedHeader.tsx`, `frontend/src/components/feed/FeedSkeleton.tsx`
   - Pre-commit: `cd frontend && npx vitest run src/components/feed`
 
-- [ ] 35. Content Detail Page + Reading View
+- [x] 35. Content Detail Page + Reading View
 
   **What to do**:
   - Implement `frontend/src/app/content/[id]/page.tsx` — content detail with three-panel layout:
@@ -2849,7 +2849,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `frontend/src/app/content/[id]/page.tsx`, `frontend/src/components/content/AIAnalysis.tsx`, `frontend/src/components/content/ContentSubgraph.tsx`, `frontend/src/components/content/OriginalContent.tsx`, `frontend/src/components/content/FeedbackBar.tsx`
   - Pre-commit: `cd frontend && npx vitest run src/components/content`
 
-- [ ] 36. Settings Page — Sources, Preferences, Schedule
+- [x] 36. Settings Page — Sources, Preferences, Schedule
 
   **What to do**:
   - Implement `frontend/src/app/settings/page.tsx` — settings page with tabbed sections:
@@ -3579,7 +3579,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
   - Files: `frontend/src/app/reports/page.tsx`, `frontend/src/app/reports/[id]/page.tsx`, `frontend/src/components/reports/*.tsx`
   - Pre-commit: `cd frontend && npx vitest run src/components/reports`
 
-- [ ] 47. Cognitive Dashboard — Learning Progress
+- [x] 47. Cognitive Dashboard — Learning Progress
 
   **What to do**:
   - Implement `frontend/src/app/dashboard/page.tsx` — cognitive dashboard showing:
@@ -3589,35 +3589,16 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
     - **Community map**: simplified KG cluster view (communities from Task 45 as colored groups)
     - **Review schedule**: upcoming FSRS due cards count, streak info
     - **Mode indicator**: current user mode with recent mode history
-  - Use lightweight chart library: `recharts` or `chart.js` via react-chartjs-2
   - Create `frontend/src/components/dashboard/LearningVelocity.tsx`, `KnowledgeGrowth.tsx`, `MemoryOverview.tsx`, `CommunityOverview.tsx`, `ReviewSchedule.tsx`
   - API: `GET /api/v1/dashboard/stats` — aggregated endpoint returning all dashboard data
   - Responsive: cards in 2-column grid on desktop, stack on mobile
   - TDD: Component tests for each widget
 
-  **Must NOT do**:
-  - Do NOT build interactive KG visualization — that’s Task 53 (React Flow)
-  - Do NOT use D3.js directly — use React-friendly wrappers
-  - Do NOT over-animate — simple, clean data display
-
-  **Recommended Agent Profile**:
-  - **Category**: `visual-engineering`
-  - **Skills**: [`frontend-ui-ux`]
-
-  **Parallelization**:
-  - **Can Run In Parallel**: YES
-  - **Parallel Group**: Wave 3.2 (with Tasks 43, 46)
-  - **Blocks**: Task 48
-  - **Blocked By**: Tasks 40 (FSRS data), 41 (memory data), 45 (community data), 26 (Next.js)
-
   **References**:
-  - DESIGN.md:1003-1009 — Learning trajectory visualization (KG evolution, Sankey, gap analysis)
   - `src/services/memory_system.py` — Memory tier data (Task 41)
   - `src/services/community_detection.py` — Community data (Task 45)
   - `src/services/fsrs_engine.py` — Review schedule data (Task 40)
 
-  **Acceptance Criteria**:
-  **TDD:** `cd frontend && npx vitest run src/components/dashboard` → PASS (5+ tests)
   **QA Scenarios:**
   ```
   Scenario: Dashboard loads with all widgets
@@ -4147,7 +4128,7 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
 - [ ] 53. Knowledge Graph Interactive Visualization (React Flow)
 
   **What to do**:
-  - Build the interactive KG visualization page in the Next.js dashboard (DESIGN.md:899-904):
+  - Build the interactive KG visualization page in the Next.js dashboard 
     - Use `reactflow` (React Flow) library for graph rendering:
       - Nodes = concepts, colored by type (concept/method/tool/theory) and sized by mastery level
       - Edges = relationships, labeled with relation type (prerequisite, extends, relates_to)
@@ -4178,37 +4159,18 @@ Max Concurrent: 6 (Waves 0.1, 0.2)
     - Support pagination for large graphs (>500 nodes): return top N by relevance + connected subgraph
 
   **Must NOT do**:
-  - Do NOT use D3.js directly — use React Flow for React integration
   - Do NOT implement 3D graph visualization — 2D only
   - Do NOT implement real-time collaborative editing
   - Do NOT pre-compute all graph layouts server-side — let React Flow handle layout client-side
-
-  **Recommended Agent Profile**:
-  - **Category**: `visual-engineering`
-    - Reason: Complex interactive data visualization with React Flow, requires strong frontend skills and visual design sense
-  - **Skills**: [`frontend-ui-ux`, `playwright`]
-    - `frontend-ui-ux`: Graph visualization UI requires careful UX design for complex data
-    - `playwright`: Needed for QA scenarios testing graph interactions
-  - **Skills Evaluated but Omitted**:
-    - `dev-browser`: Playwright skill sufficient for testing
-
-  **Parallelization**:
-  - **Can Run In Parallel**: YES (with Tasks 54, 55)
-  - **Parallel Group**: Wave 4.2
-  - **Blocks**: Task 58 (final E2E)
-  - **Blocked By**: Task 30 (Next.js dashboard shell), Task 27 (Neo4j KG service), Task 45 (community detection)
 
   **References**:
 
   **Pattern References**:
   - `frontend/src/app/dashboard/` — Existing dashboard layout from Task 38
   - `frontend/src/components/` — Existing shadcn/ui components
-  - Folo reference: `Folo/packages/internal/components/ui/` — Component patterns for reference
 
   **API/Type References**:
-  - `src/api/kg.py` — KG API endpoints from Task 27
   - `src/schemas/kg.py` — Graph node/edge schemas
-  - DESIGN.md:899-904 — Knowledge graph page information architecture
 
   **External References**:
   - React Flow docs: https://reactflow.dev/docs/getting-started/introduction

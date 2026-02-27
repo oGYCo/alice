@@ -100,7 +100,7 @@ export default function ContentDetailPage() {
           <div className="lg:col-span-2">
             <OriginalContent 
               content={content.full_content || content.summary || "No content available."} 
-              sourceUrl={content.url} 
+              sourceUrl={content.source_url} 
             />
           </div>
         </div>

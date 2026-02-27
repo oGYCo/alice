@@ -2,10 +2,10 @@
 export interface ContentItem {
   id: number;
   title: string;
-  url: string;
+  url?: string; // not returned by backend; source_url is the article URL
   summary: string | null;
   source: string;
-  source_url: string;
+  source_url: string; // normalized article URL (used for dedup in backend)
   content_type: string | null;
   quality_score: number | null;
   p_score: number | null;

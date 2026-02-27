@@ -46,17 +46,12 @@ NEO4J_TEST_URI = os.environ.get("NEO4J_TEST_URI", "")
 NEO4J_TEST_USER = os.environ.get("NEO4J_TEST_USER", "neo4j")
 NEO4J_TEST_PASS = os.environ.get("NEO4J_TEST_PASS", "password")
 
-_MISSING = []
-if not TEST_DATABASE_URL:
-    _MISSING.append("TEST_DATABASE_URL")
-if not NEO4J_TEST_URI:
-    _MISSING.append("NEO4J_TEST_URI")
-
-if _MISSING:
-    pytest.skip(
-        f"Skipping integration wiring tests — missing env vars: {', '.join(_MISSING)}",
-        allow_module_level=True,
-    )
+_need_db = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL not set")
+_need_neo4j = pytest.mark.skipif(not NEO4J_TEST_URI, reason="NEO4J_TEST_URI not set")
+_need_infra = pytest.mark.skipif(
+    not TEST_DATABASE_URL or not NEO4J_TEST_URI,
+    reason="TEST_DATABASE_URL and/or NEO4J_TEST_URI not set",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +138,7 @@ def _make_user(chat_id: int = 100050) -> User:
 # ---------------------------------------------------------------------------
 
 
+@_need_infra
 async def test_push_batch_uses_matching_with_graph(
     session: AsyncSession,
     graph_client: GraphClient,
@@ -199,6 +195,7 @@ async def test_push_batch_uses_matching_with_graph(
 # ---------------------------------------------------------------------------
 
 
+@_need_db
 async def test_ranking_service_computes_and_persists_p_score(session: AsyncSession):
     """RankingService.update_p_score computes and stores p_score on Content."""
     content = _make_content(
@@ -216,6 +213,7 @@ async def test_ranking_service_computes_and_persists_p_score(session: AsyncSessi
     assert content.p_score == p
 
 
+@_need_db
 async def test_push_batch_orders_by_p_score(session: AsyncSession):
     """get_next_push_batch returns content ordered by p_score DESC."""
     lo = _make_content("https://test-wiring-2.com/lo", quality_score=3.0, p_score=0.1)
@@ -237,7 +235,7 @@ async def test_push_batch_orders_by_p_score(session: AsyncSession):
 # ---------------------------------------------------------------------------
 
 
-def test_celery_beat_has_retry_failed():
+async def test_celery_beat_has_retry_failed():
     """Celery Beat schedule includes retry-failed task."""
     from alice.worker.celery_app import celery_app
 
@@ -248,7 +246,7 @@ def test_celery_beat_has_retry_failed():
     assert entry["schedule"] == 21600.0
 
 
-def test_celery_beat_has_batch_p_scores():
+async def test_celery_beat_has_batch_p_scores():
     """Celery Beat schedule includes batch p_score update task."""
     from alice.worker.celery_app import celery_app
 
@@ -291,28 +289,22 @@ async def test_feedback_dispatches_kg_update_task():
 
     client = TestClient(app)
 
-    # Patch Celery task dispatch AND provide a real DB content row
+    # Patch at the source module where the task is defined; the lazy import
+    # inside _dispatch_kg_update reads from alice.pipeline.tasks.
     with patch(
-        "alice.api.v1.feedback.task_kg_feedback_update"
+        "alice.pipeline.tasks.task_kg_feedback_update"
     ) as mock_task:
         mock_task.delay = MagicMock()
 
-        # We need a valid content_id in the DB; use the test DB if available
-        # or just check the dispatch logic by mocking deeper
-        with patch(
-            "alice.api.v1.feedback.create_feedback",
-            wraps=None,
-        ):
-            response = client.post(
-                "/api/v1/feedback",
-                json={
-                    "content_id": 1,
-                    "feedback_type": "positive",
-                    "user_id": 1,
-                },
-                headers={"X-API-Key": "alicesecret"},
-            )
-            # The request may fail due to no DB, but the dispatch path should be wired
-            # If status is 201, task was dispatched
-            if response.status_code == 201:
-                mock_task.delay.assert_called_once()
+        response = client.post(
+            "/api/v1/feedback",
+            json={
+                "content_id": 1,
+                "feedback_type": "positive",
+                "user_id": 1,
+            },
+            headers={"X-API-Key": "alicesecret"},
+        )
+        # If status is 201, the full path ran and task was dispatched
+        if response.status_code == 201:
+            mock_task.delay.assert_called_once()

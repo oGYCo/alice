@@ -1,6 +1,8 @@
 """Feedback callback query handler — stores user feedback to PostgreSQL."""
 
 import logging
+from collections.abc import Callable
+from typing import Any
 
 from aiogram import Bot
 from aiogram.types import CallbackQuery
@@ -55,6 +57,20 @@ async def handle_feedback_callback(query: CallbackQuery, bot: Bot) -> None:
 
     Parses callback data, stores Feedback record to DB, answers query.
     """
+    del bot  # reserved for future bot-side follow-up actions
+    await _handle_feedback_callback(query, session_factory=AsyncSessionLocal)
+
+
+async def _handle_feedback_callback(
+    query: CallbackQuery,
+    *,
+    session_factory: Callable[[], Any],
+) -> None:
+    """Internal feedback handler with injectable DB session factory.
+
+    Keeping session creation injectable allows integration tests to run against
+    a real test database without patching module globals.
+    """
     try:
         feedback_type, content_id = parse_callback_data(query.data)
     except ValueError:
@@ -64,7 +80,7 @@ async def handle_feedback_callback(query: CallbackQuery, bot: Bot) -> None:
 
     user_id = query.from_user.id
 
-    async with AsyncSessionLocal() as session:
+    async with session_factory() as session:
         feedback = Feedback(
             content_id=content_id,
             user_id=user_id,
@@ -82,6 +98,17 @@ async def handle_feedback_callback(query: CallbackQuery, bot: Bot) -> None:
 
     confirmation = _FEEDBACK_MESSAGES.get(feedback_type, "✅ 已记录！")
     await query.answer(text=confirmation)
+
+
+async def handle_feedback_callback_with_session_factory(
+    query: CallbackQuery,
+    bot: Bot,
+    *,
+    session_factory: Callable[[], Any],
+) -> None:
+    """Public helper for tests to inject a real DB session factory."""
+    del bot  # reserved for future bot-side follow-up actions
+    await _handle_feedback_callback(query, session_factory=session_factory)
 
 
 async def handle_explain_concept(query: CallbackQuery, bot: Bot) -> None:

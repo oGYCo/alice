@@ -122,21 +122,18 @@ class SubgraphExtractor:
         subgraph: ContentSubgraph,
     ) -> None:
         """Upsert concept nodes + relationships into Neo4j."""
-        # Build a name → label lookup for edge creation
+        # 1. Ensure the Content node exists (keyed by integer id)
+        await self._graph_repo.upsert_content_node(content_id)
+
+        # 2. Upsert concept nodes and link them to the Content node
         name_to_label: dict[str, str] = {}
         for node in subgraph.nodes:
             label = self._map_type_to_label(node.type)
             name_to_label[node.name] = label
             await self._graph_repo.upsert_concept(node.name, label=label, aliases=node.aliases)
-            # Link content → concept
-            await self._graph_repo.create_relationship(
-                str(content_id),
-                NodeLabel.CONTENT,
-                node.name,
-                label,
-                RelType.DISCUSSES,
-            )
+            await self._graph_repo.link_content_to_concept(content_id, node.name, label)
 
+        # 3. Upsert edges between concept nodes
         for edge in subgraph.edges:
             from_label = name_to_label.get(edge.from_, NodeLabel.CONCEPT)
             to_label = name_to_label.get(edge.to, NodeLabel.CONCEPT)

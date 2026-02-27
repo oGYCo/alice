@@ -58,7 +58,7 @@ async def search_content(
         filters = f"quality_score >= {min_score}"
 
     try:
-        result = svc.search(q, filters=filters, limit=limit)
+        result = svc.search(q, filters=filters, limit=limit, offset=offset)
     except meilisearch.errors.MeilisearchApiError:
         raise HTTPException(status_code=503, detail="Search service unavailable")
 

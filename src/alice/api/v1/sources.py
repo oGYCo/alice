@@ -1,5 +1,6 @@
 """Sources API router — POST /sources, GET /sources, PUT /sources/{id}, DELETE /sources/{id}."""
 
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -11,6 +12,7 @@ from alice.schemas.source import SourceConfigSchema, SourceUpdateSchema
 from alice.services.source_service import SourceService
 
 router = APIRouter(prefix="/sources", tags=["sources"])
+logger = logging.getLogger(__name__)
 
 
 class SourceResponseSchema(BaseModel):
@@ -40,6 +42,14 @@ async def create_source(
 ) -> Any:
     """Create a new content source."""
     source = await svc.create(config)
+    # Best-effort bootstrap fetch so newly added sources can populate feed quickly.
+    try:
+        from alice.worker.tasks import task_fetch_all_sources
+
+        task_fetch_all_sources.delay(source.id)
+    except Exception:  # noqa: BLE001
+        # Source creation should not fail if broker is unavailable.
+        logger.warning("source_bootstrap_fetch_dispatch_failed", extra={"source_id": source.id})
     return source
 
 

@@ -33,6 +33,10 @@ class PipelineStatusResponse(BaseModel):
     failed: int
 
 
+class FetchTriggerRequest(BaseModel):
+    source_id: int | None = None
+
+
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
@@ -136,6 +140,21 @@ async def retry_content(
     await storage.update_pipeline_status(content_id, PipelineStatus.fetched)
     task_run_gatekeeper.delay(content_id)
     return {"content_id": content_id, "status": "queued"}
+
+
+@router.post("/fetch/trigger")
+async def trigger_fetch(
+    body: FetchTriggerRequest,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> Any:
+    """Fetch sources immediately in-process.
+
+    This endpoint is useful in local development when Celery worker/beat is not
+    running. It executes the fetch task synchronously in the API process.
+    """
+    from alice.worker.tasks import fetch_all_sources_once
+
+    return await fetch_all_sources_once(body.source_id, session=session)
 
 
 # ---------------------------------------------------------------------------

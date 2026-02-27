@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     MEILISEARCH_URL: str = "http://meilisearch:7700"
     MEILISEARCH_API_KEY: str = "masterKey"
 
+    # Alice API Key (frontend authentication)
+    ALICE_API_KEY: str = "alicesecret"
+
+    # Neo4j
+    NEO4J_URI: str = "bolt://neo4j:7687"
+    NEO4J_AUTH: str = "neo4j/alice_neo4j"  # format: user/password
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

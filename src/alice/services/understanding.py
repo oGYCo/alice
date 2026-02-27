@@ -36,8 +36,33 @@ class UnderstandingService:
         return parsed
 
     def _parse_response(self, response: str) -> ContentUnderstandingSchema | None:
+        import re
+
+        text = response.strip()
+        # Strip markdown code fences: ```json ... ``` or ``` ... ```
+        # split("```", 2) → ['', 'json\n{...}\n', ''] so index [1] is the content
+        if text.startswith("```") and text.count("```") >= 2:
+            inner = text.split("```", 2)[1]
+            # Drop the language hint line (e.g. "json\n")
+            if "\n" in inner:
+                first_line, rest = inner.split("\n", 1)
+                text = rest.strip() if not first_line.strip().startswith("{") else inner.strip()
+            else:
+                text = inner.strip()
+
         try:
-            data = json.loads(response)
+            data = json.loads(text)
         except json.JSONDecodeError:
+            # Fall back: extract first JSON object from response
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                try:
+                    data = json.loads(match.group())
+                except json.JSONDecodeError:
+                    return None
+            else:
+                return None
+        try:
+            return ContentUnderstandingSchema.model_validate(data)
+        except Exception:
             return None
-        return ContentUnderstandingSchema.model_validate(data)

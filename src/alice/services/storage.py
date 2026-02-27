@@ -3,10 +3,12 @@
 from collections.abc import Sequence
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from sqlalchemy import select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from alice.models.content import Content, PipelineStatus
+from alice.models.feedback import Feedback
 from alice.schemas.content import RawContentSchema
 
 
@@ -106,6 +108,7 @@ class ContentStorageService:
         key_points: list[str],
         domains: list[str],
         read_time: int,
+        content_type: str | None = None,
     ) -> None:
         """Store LLM understanding results and advance status to 'understood'."""
         content = await self._get_or_raise(content_id)
@@ -114,6 +117,10 @@ class ContentStorageService:
         content.domains = domains
         content.estimated_read_time = read_time
         content.pipeline_status = PipelineStatus.understood
+        if content_type is not None:
+            meta = dict(content.metadata_) if content.metadata_ else {}
+            meta["content_type"] = content_type
+            content.metadata_ = meta
         await self._session.commit()
 
     async def update_score(
@@ -147,6 +154,52 @@ class ContentStorageService:
         )
         return list(result.scalars().all())
 
+    async def list_content(
+        self,
+        *,
+        status: PipelineStatus | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        sort: str = "newest",
+    ) -> Sequence[Content]:
+        """List content with optional status filter, pagination, and basic sort.
+
+        Uses load_only to avoid selecting optional/newer columns that may not
+        exist on databases that have not applied every migration yet.
+        """
+        query: Select[tuple[Content]] = select(Content).options(
+            load_only(
+                Content.id,
+                Content.source,
+                Content.source_url,
+                Content.title,
+                Content.pipeline_status,
+                Content.quality_score,
+                Content.summary,
+                Content.key_points,
+                Content.domains,
+                Content.estimated_read_time,
+                Content.metadata_,
+                Content.created_at,
+            )
+        )
+
+        if status is not None:
+            query = query.where(Content.pipeline_status == status)
+
+        if sort == "oldest":
+            query = query.order_by(Content.created_at.asc())
+        elif sort == "relevance":
+            query = query.order_by(
+                Content.quality_score.desc().nullslast(),
+                Content.created_at.desc(),
+            )
+        else:
+            query = query.order_by(Content.created_at.desc())
+
+        result = await self._session.execute(query.offset(offset).limit(limit))
+        return list(result.scalars().all())
+
     async def get_pushable(
         self,
         min_score: float = 6.0,
@@ -174,3 +227,29 @@ class ContentStorageService:
         if content is None:
             raise ValueError(f"Content {content_id} not found")
         return content
+
+    async def delete_by_id(self, content_id: int) -> bool:
+        """Delete a single content item by id. Returns True if deleted, False if not found."""
+        # Remove dependent feedback rows first to satisfy FK constraint
+        await self._session.execute(
+            delete(Feedback).where(Feedback.content_id == content_id)
+        )
+        result = await self._session.execute(
+            delete(Content).where(Content.id == content_id)
+        )
+        await self._session.commit()
+        return result.rowcount > 0  # type: ignore[return-value]
+
+    async def delete_batch(self, ids: list[int]) -> int:
+        """Delete multiple content items by ids. Returns count of deleted rows."""
+        if not ids:
+            return 0
+        # Remove dependent feedback rows first to satisfy FK constraint
+        await self._session.execute(
+            delete(Feedback).where(Feedback.content_id.in_(ids))
+        )
+        result = await self._session.execute(
+            delete(Content).where(Content.id.in_(ids))
+        )
+        await self._session.commit()
+        return result.rowcount  # type: ignore[return-value]

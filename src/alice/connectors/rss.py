@@ -64,18 +64,28 @@ class FeedParserLike(Protocol):
 
 class RSSConnector(BaseConnector):
     _tracking_params: set[str] = {"fbclid", "ref"}
+    _default_headers: dict[str, str] = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
 
     def __init__(self) -> None:
         super().__init__()
 
     async def fetch(self, config: SourceConfigSchema) -> list[RawContentSchema]:
-        feed_xml = self._fetch_feed(config.url)
+        config_map = cast(dict[str, object], config.config)
+        request_headers = self._build_request_headers(config_map.get("headers"))
+        feed_xml = self._fetch_feed(config.url, request_headers)
         parsed = self._parse_feed(feed_xml)
         fetched_at = datetime.now(UTC)
 
         results: list[RawContentSchema] = []
         seen_urls: set[str] = set()
-        config_map = cast(dict[str, object], config.config)
         limit_value = config_map.get("limit")
         limit = limit_value if isinstance(limit_value, int) else None
 
@@ -124,12 +134,31 @@ class RSSConnector(BaseConnector):
 
         return results
 
-    def _fetch_feed(self, url: str) -> str:
+    def _build_request_headers(self, custom_headers: object) -> dict[str, str]:
+        headers = dict(self._default_headers)
+        if isinstance(custom_headers, dict):
+            for key, value in custom_headers.items():
+                if isinstance(key, str) and isinstance(value, str):
+                    headers[key] = value
+        return headers
+
+    def _fetch_feed(self, url: str, headers: dict[str, str] | None = None) -> str:
+        request_headers = headers or self._default_headers
         try:
-            response = httpx.get(url, timeout=20.0)
+            response = httpx.get(
+                url,
+                timeout=20.0,
+                headers=request_headers,
+                follow_redirects=True,
+            )
             _ = response.raise_for_status()
         except httpx.HTTPError as exc:
-            logger.error("rss_fetch_failed", url=url, error=str(exc))
+            logger.error(
+                "rss_fetch_failed",
+                url=url,
+                error=str(exc),
+                headers=request_headers,
+            )
             raise
         return response.text
 

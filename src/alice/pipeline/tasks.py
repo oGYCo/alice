@@ -16,7 +16,10 @@ import json
 import logging
 
 from alice.db import AsyncSessionLocal
-from alice.llm.mock import MockLLMClient
+from alice.graph.client import GraphClient
+from alice.graph.extractor import SubgraphExtractor
+from alice.graph.repository import GraphRepository
+from alice.llm.factory import create_llm_client
 from alice.models.content import PipelineStatus
 from alice.services.gatekeeper import GatekeeperService
 from alice.services.scoring import ScoringService
@@ -34,6 +37,13 @@ logger = logging.getLogger(__name__)
 
 async def _get_storage(session) -> ContentStorageService:
     return ContentStorageService(session)
+
+
+def _create_graph_client() -> GraphClient:
+    """Build a GraphClient from env-configured NEO4J_URI / NEO4J_AUTH."""
+    from alice.config import settings
+    user, password = settings.NEO4J_AUTH.split("/", 1)
+    return GraphClient(settings.NEO4J_URI, (user, password))
 
 
 async def _fail_content(session, content_id: int, stage: str, reason: str) -> None:
@@ -69,8 +79,8 @@ def task_run_gatekeeper(self, content_id: int) -> dict:
             if content is None:
                 raise ValueError(f"Content {content_id} not found")
 
-            # Use MockLLMClient as fallback; real client injected via config in prod
-            llm_client = MockLLMClient()
+            # Gatekeeper uses Ollama with automatic rule-based fallback
+            llm_client = create_llm_client("ollama")
             gk = GatekeeperService(llm_client)
 
             text = content.extracted_text or content.raw_text or ""
@@ -151,7 +161,7 @@ def task_run_understanding(self, content_id: int) -> dict:
             if content is None:
                 raise ValueError(f"Content {content_id} not found")
 
-            llm_client = MockLLMClient()
+            llm_client = create_llm_client("deepseek")
             understanding_svc = UnderstandingService(llm_client)
 
             title = content.title or ""
@@ -182,9 +192,10 @@ def task_run_understanding(self, content_id: int) -> dict:
                 key_points=result.key_points,
                 domains=result.domains,
                 read_time=result.estimated_read_time,
+                content_type=result.content_type,
             )
-            # Dispatch next stage — NO Celery chain
-            task_run_scoring.delay(content_id)
+            # Dispatch graph extraction before scoring
+            task_run_graph_extraction.delay(content_id)
             logger.info(
                 "understanding_complete",
                 extra={"content_id": content_id, "domains": result.domains},
@@ -194,6 +205,87 @@ def task_run_understanding(self, content_id: int) -> dict:
                 "stage": "understanding",
                 "domains": result.domains,
             }
+
+    return asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# Stage 2.5: Graph extraction (Neo4j concept subgraph)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="alice.pipeline.tasks.task_run_graph_extraction",
+    max_retries=2,
+    retry_backoff=True,
+)
+def task_run_graph_extraction(self, content_id: int) -> dict:
+    """Stage 2.5: Extract concept subgraph and store in Neo4j.
+
+    Reads:  content.pipeline_status == 'understood', summary, key_points
+    Writes: concept nodes + relationships into Neo4j (non-blocking if Neo4j down)
+    Next:   task_run_scoring (always, even if extraction fails)
+    """
+
+    async def _run() -> dict:
+        async with AsyncSessionLocal() as session:
+            storage = ContentStorageService(session)
+            content = await storage.get_by_id(content_id)
+            if content is None:
+                raise ValueError(f"Content {content_id} not found")
+
+            title = content.title or ""
+            summary = content.summary or ""
+            key_points = content.key_points or []
+
+            if not summary:
+                logger.info(
+                    "graph_extraction_skipped_no_summary",
+                    extra={"content_id": content_id},
+                )
+                if content.pipeline_status == PipelineStatus.understood:
+                    task_run_scoring.delay(content_id)
+                return {"content_id": content_id, "stage": "graph_extraction", "skipped": True}
+
+            # Only chain to scoring for normal pipeline flow (status == 'understood').
+            # Retroactive runs on already-scored/indexed items skip scoring.
+            should_run_scoring = content.pipeline_status == PipelineStatus.understood
+
+            try:
+                graph_client = _create_graph_client()
+                await graph_client.connect()
+                try:
+                    llm_client = create_llm_client("deepseek")
+                    graph_repo = GraphRepository(graph_client)
+                    extractor = SubgraphExtractor(llm_client, graph_repo)
+                    subgraph = await extractor.extract(
+                        content_id=content_id,
+                        title=title,
+                        summary=summary,
+                        key_points=key_points,
+                    )
+                    logger.info(
+                        "graph_extraction_complete",
+                        extra={
+                            "content_id": content_id,
+                            "nodes": len(subgraph.nodes),
+                            "edges": len(subgraph.edges),
+                        },
+                    )
+                finally:
+                    await graph_client.close()
+            except Exception as exc:
+                # Graph extraction is best-effort: log and continue pipeline
+                logger.error(
+                    "graph_extraction_error",
+                    extra={"content_id": content_id, "error": str(exc)},
+                )
+
+            # Always proceed to scoring if this is part of normal pipeline
+            if should_run_scoring:
+                task_run_scoring.delay(content_id)
+            return {"content_id": content_id, "stage": "graph_extraction"}
 
     return asyncio.run(_run())
 
@@ -224,7 +316,7 @@ def task_run_scoring(self, content_id: int) -> dict:
             if content is None:
                 raise ValueError(f"Content {content_id} not found")
 
-            llm_client = MockLLMClient()
+            llm_client = create_llm_client("deepseek")
             scoring_svc = ScoringService(llm_client)
 
             title = content.title or ""

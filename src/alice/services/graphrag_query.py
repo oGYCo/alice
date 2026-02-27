@@ -25,7 +25,7 @@ logger = cast(_Logger, structlog.get_logger(__name__))
 
 
 # ---------------------------------------------------------------------------
-# Configuration constants (override via config.py in production)
+# Configuration constants (can be wired into alice.config settings in production)
 # ---------------------------------------------------------------------------
 
 GRAPHRAG_GRAPH_WEIGHT: float = 0.5

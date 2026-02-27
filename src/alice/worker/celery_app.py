@@ -1,8 +1,33 @@
 """Celery application factory and configuration."""
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 from alice.config import settings
+
+
+@worker_process_init.connect
+def reset_db_pool(**kwargs: object) -> None:
+    """Reinitialise the SQLAlchemy engine in each forked worker process.
+
+    Celery uses prefork; child processes inherit the parent's asyncpg
+    connections and event-loop state.  Using NullPool here means every
+    task creates its own fresh connection and closes it afterwards, which
+    completely avoids "Future attached to a different loop" and
+    InterfaceError races.
+    """
+    import alice.db as db_module
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    # Abandon (don't try to close) inherited connections from the parent process.
+    db_module.engine.sync_engine.dispose(close=False)
+    db_module.engine = create_async_engine(
+        settings.DATABASE_URL, poolclass=NullPool, echo=settings.DEBUG
+    )
+    db_module.AsyncSessionLocal = async_sessionmaker(
+        db_module.engine, class_=AsyncSession, expire_on_commit=False
+    )
 
 
 def create_celery_app() -> Celery:
@@ -11,7 +36,7 @@ def create_celery_app() -> Celery:
         "alice",
         broker=settings.CELERY_BROKER_URL,
         backend=settings.REDIS_URL,
-        include=["alice.worker.tasks"],
+        include=["alice.worker.tasks", "alice.pipeline.tasks"],
     )
 
     app.conf.update(
@@ -22,16 +47,18 @@ def create_celery_app() -> Celery:
         # Error handling
         task_acks_late=True,
         task_reject_on_worker_lost=True,
-        # Retry config
-        task_autoretry_for=(Exception,),
-        task_max_retries=5,
-        task_retry_backoff=True,
-        task_retry_backoff_max=1800,  # max 30 minutes
         # Time limits
         task_time_limit=600,  # 10 minutes hard limit
         task_soft_time_limit=540,  # 9 minutes soft limit
         # Routes
         task_routes={
+            "alice.pipeline.tasks.task_run_gatekeeper": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_run_understanding": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_run_scoring": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_run_indexing": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_retry_failed": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_push_batch": {"queue": "push"},
+            # Legacy compatibility routes (old stub task names).
             "alice.worker.tasks.task_run_gatekeeper": {"queue": "pipeline"},
             "alice.worker.tasks.task_run_understanding": {"queue": "pipeline"},
             "alice.worker.tasks.task_run_scoring": {"queue": "pipeline"},
@@ -45,6 +72,11 @@ def create_celery_app() -> Celery:
                 "task": "alice.worker.tasks.task_fetch_all_sources",
                 "schedule": 1800.0,  # 30 minutes in seconds
                 "options": {"queue": "fetch"},
+            },
+            "retry-failed-content-every-hour": {
+                "task": "alice.pipeline.tasks.task_retry_failed",
+                "schedule": 3600.0,  # 1 hour in seconds
+                "options": {"queue": "pipeline"},
             },
         },
         beat_schedule_filename="celerybeat-schedule",

@@ -4,7 +4,10 @@ from pathlib import Path
 
 import jinja2
 
-PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+# Development layout:  <repo>/src/alice/prompts.py  →  <repo>/prompts/
+# Docker (uv install): /app/.venv/lib/.../alice/prompts.py  →  /app/prompts/
+_src_relative = Path(__file__).parent.parent.parent / "prompts"
+PROMPTS_DIR = _src_relative if _src_relative.exists() else Path("/app/prompts")
 
 
 class PromptManager:

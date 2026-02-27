@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Home, Search, Settings, PlusCircle, ChevronLeft } from 'lucide-react';
+import { Home, Search, Settings, PlusCircle, ChevronLeft, LogOut } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useSidebarStore } from '@/lib/store';
+import { usePathname, useRouter } from 'next/navigation';
+import { useSidebarStore, useAuthStore } from '@/lib/store';
 import { apiClient } from '@/lib/api';
 import type { Source } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -17,7 +17,14 @@ const navItems = [
 
 export function Sidebar() {
   const { isOpen, toggleSidebar } = useSidebarStore();
+  const { logout } = useAuthStore();
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
   const [sources, setSources] = useState<Source[]>([]);
   const [sourcesLoaded, setSourcesLoaded] = useState(false);
 
@@ -48,8 +55,8 @@ export function Sidebar() {
     <aside
       data-testid="sidebar"
       className={cn(
-        'flex flex-col h-full bg-card border-r border-border transition-all duration-200',
-        isOpen ? 'w-64' : 'w-14'
+        'flex flex-col h-full bg-card border-r border-border shadow-[1px_0_8px_rgba(0,0,0,0.05)] transition-all duration-200',
+        isOpen ? 'w-50' : 'w-14'
       )}
     >
       {/* Header */}
@@ -125,6 +132,18 @@ export function Sidebar() {
           )}
         </div>
       )}
+
+      {/* Logout */}
+      <div className="p-2 border-t border-border">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          aria-label="Logout"
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          {isOpen && <span>退出登录</span>}
+        </button>
+      </div>
     </aside>
   );
 }

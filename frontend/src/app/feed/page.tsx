@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Trash2, CheckSquare, Square, X } from 'lucide-react';
 
+/** Returns true when the error is a 401 — handled globally by AuthGuard, no UI needed. */
+const isAuthError = (e: unknown) => (e as { status?: number })?.status === 401;
+
 export default function FeedPage() {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,9 +47,9 @@ export default function FeedPage() {
       setItems(prev => isReset ? newItems : [...prev, ...newItems]);
       setHasMore(newItems.length === 20);
     } catch (error) {
+      if (isAuthError(error)) return; // AuthGuard will redirect to /login
       const message = error instanceof Error ? error.message : 'Failed to load feed';
       setLoadError(message);
-      console.error('Failed to load feed:', message);
     } finally {
       setLoading(false);
     }
@@ -87,8 +90,8 @@ export default function FeedPage() {
   const handleFeedback = async (id: number, type: string) => {
     try {
       await apiClient.submitFeedback(id, type);
-      console.log(`Feedback ${type} submitted for ${id}`);
     } catch (error) {
+      if (isAuthError(error)) return;
       console.error('Failed to submit feedback:', error);
     }
   };
@@ -96,11 +99,10 @@ export default function FeedPage() {
   const handleDelete = useCallback(async (id: number) => {
     try {
       await apiClient.deleteContent(id);
-      // Reload from page 1 to prevent offset-drift: if we only filter local state,
-      // the next pagination page will skip an item that shifted into the boundary.
       setPage(1);
       await loadFeed(1, sortBy, true);
     } catch (error) {
+      if (isAuthError(error)) return;
       console.error('Failed to delete content:', error);
     }
   }, [loadFeed, sortBy]);
@@ -113,10 +115,10 @@ export default function FeedPage() {
       await apiClient.deleteContentBatch(ids);
       setSelectedIds(new Set());
       setSelectMode(false);
-      // Reload from page 1 to stay in sync with DB after batch deletion
       setPage(1);
       await loadFeed(1, sortBy, true);
     } catch (error) {
+      if (isAuthError(error)) return;
       console.error('Failed to batch delete content:', error);
     } finally {
       setIsDeleting(false);

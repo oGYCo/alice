@@ -10,6 +10,8 @@ import { OriginalContent } from '@/components/content/OriginalContent';
 import { FeedbackBar } from '@/components/content/FeedbackBar';
 import { Loader2, AlertCircle } from 'lucide-react';
 
+const isAuthError = (e: unknown) => (e as { status?: number })?.status === 401;
+
 const DOMAIN_TAG_COLORS = [
   'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700',
   'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700',
@@ -35,7 +37,7 @@ export default function ContentDetailPage() {
         setContent(data);
         setError(null);
       } catch (err) {
-        console.error('Failed to fetch content detail:', err);
+        if (isAuthError(err)) return;
         setError(err instanceof Error ? err.message : 'Failed to load content.');
       } finally {
         setLoading(false);
@@ -48,9 +50,8 @@ export default function ContentDetailPage() {
   const handleFeedback = async (contentId: number, type: string) => {
     try {
       await apiClient.submitFeedback(contentId, type);
-      // Optional: Show success toast or update UI state
-      console.log(`Feedback ${type} submitted for ${contentId}`);
     } catch (err) {
+      if (isAuthError(err)) return;
       console.error('Failed to submit feedback:', err);
     }
   };
@@ -136,7 +137,7 @@ export default function ContentDetailPage() {
         </div>
 
         {/* ── Article body ── */}
-        <div className="max-w-[740px] mx-auto">
+        <div className="max-w-[960px] mx-auto">
           <hr className="border-border/40 mb-10" />
           <OriginalContent
             content={content.full_content}

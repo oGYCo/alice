@@ -1,12 +1,19 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Source_Serif_4 } from 'next/font/google';
 import './globals.css';
-import { Sidebar } from '@/components/layout/sidebar';
+import { ConditionalSidebar } from '@/components/layout/ConditionalSidebar';
+import { AuthGuard } from '@/components/layout/AuthGuard';
 
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
+});
+
+const sourceSerif = Source_Serif_4({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-source-serif',
 });
 
 export const metadata: Metadata = {
@@ -17,10 +24,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans h-screen flex bg-background text-foreground antialiased`}>
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
-          {children}
+      <body className={`${inter.variable} ${sourceSerif.variable} font-sans h-screen flex bg-background text-foreground antialiased`}>
+        <ConditionalSidebar />
+        <main className="flex-1 overflow-auto pl-4 pr-4">
+          <AuthGuard>
+            {children}
+          </AuthGuard>
         </main>
       </body>
     </html>

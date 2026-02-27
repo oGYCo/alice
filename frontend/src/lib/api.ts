@@ -1,14 +1,22 @@
 import type { ContentItem, ContentDetail, SearchResult, SearchHit, Source, PushPreferences } from './types';
+import { useAuthStore } from './store';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export class AliceApiClient {
   private baseUrl: string;
-  private apiKey: string | null;
 
-  constructor(baseUrl = BASE_URL, apiKey: string | null = null) {
+  constructor(baseUrl = BASE_URL) {
     this.baseUrl = baseUrl;
-    this.apiKey = apiKey;
+  }
+
+  private getApiKey(): string | null {
+    // Always read current key from store — avoids stale singleton state
+    try {
+      return useAuthStore.getState().apiKey;
+    } catch {
+      return null;
+    }
   }
 
   private buildUrl(path: string): string {
@@ -26,7 +34,7 @@ export class AliceApiClient {
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
+      ...(this.getApiKey() ? { 'X-API-Key': this.getApiKey()! } : {}),
       ...(options.headers as Record<string, string> ?? {}),
     };
     const url = this.buildUrl(path);
@@ -39,6 +47,11 @@ export class AliceApiClient {
     }
 
     if (!response.ok) {
+      // On 401, clear auth state. The AuthGuard client component watches
+      // isAuthenticated and will redirect to /login without a page flash.
+      if (response.status === 401) {
+        useAuthStore.getState().logout();
+      }
       const error = await response
         .json()
         .catch(() => ({ detail: response.statusText })) as { detail?: string; message?: string };

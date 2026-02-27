@@ -11,7 +11,8 @@ TASK: Extract the following fields and respond with ONLY valid JSON (no other te
   "summary": "2-3 sentence objective summary, no fluff, just key points (in content's language: {% if language == 'zh' %}Chinese{% else %}English{% endif %})",
   "key_points": ["point 1", "point 2", "point 3"],
   "domains": ["domain1", "domain2"],
-  "estimated_read_time": <integer minutes, minimum 1>
+  "estimated_read_time": <integer minutes, minimum 1>,
+  "content_type": "<one of: knowledge, thought, news>"
 }
 
 Rules:
@@ -19,4 +20,5 @@ Rules:
 - key_points: 2-5 specific, concrete takeaways (not generic)
 - domains: 1-4 topic areas (e.g., "machine learning", "systems design", "cryptography")
 - estimated_read_time: realistic reading time in minutes
+- content_type: "knowledge" for deep technical/academic content, "thought" for opinion/essay/philosophy, "news" for time-sensitive events/announcements
 - Write in the content's language (Chinese content → Chinese output, English → English)

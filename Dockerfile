@@ -8,6 +8,8 @@ RUN uv sync --frozen --no-editable --no-install-project
 
 COPY src/ ./src/
 COPY alembic/ ./alembic/
+COPY prompts/ ./prompts/
+COPY config/ ./config/
 RUN uv sync --frozen --no-editable
 
 

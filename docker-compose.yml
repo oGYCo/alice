@@ -60,7 +60,8 @@ services:
       MEILISEARCH_URL: "http://meilisearch:7700"
       NEO4J_URI: "bolt://neo4j:7687"
       NEO4J_AUTH: "neo4j/alice_neo4j"
-    command: ["celery", "-A", "alice.worker.celery_app", "worker", "--loglevel=info"]
+      ALICE_WORKER: "1"
+    command: ["celery", "-A", "alice.worker.celery_app", "worker", "--loglevel=info", "-Q", "celery,pipeline,fetch,push", "--pool=threads", "--concurrency=4"]
 
   scheduler:
     build: .

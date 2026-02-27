@@ -1,72 +1,296 @@
-# 项目本身
-我想做一个那种ai secretary的项目，就是现在就是一个信息爆炸的时代，我们每天要面对太多太多的信息了，例如ai领域日新月异的论文，X上面大佬的高质量分享，优质的微信公众号文章，优秀的知乎的回答，高质量的小红书帖子，reddit上面高质量的讨论，stack overflow上面硬核的适合我当前阶段的技术讨论，各种高质量的博客文章，告质量的播客，youtube和bilibili上面喜欢的up主更新了高质量视频，同时当前互联网上还充斥着各种各样的垃圾信息，能不能有一个项目能够整合以及管理这些信息，然后能通过像是telegram bot的形式来定期给我推送要看的内容（当然也有项目本身的ui可以更加详细全面的能看到完整的告质量内容），同时整个系统还应该想一个真正的秘书一样对我有比较全面的了解，也就是说即使某些内容的质量很高，但是它不适合当前阶段的我，所有可以把推送放到一个优先级排序器中，最适合当前我的应该在优先级高的位置。同时我还可以和整个系统互动给推送有类似的点赞机制，以此来优化后续的推送，同时整个系统也能够随着用户的使用来更改对用户的认知以此来自动优化信息的管理和推送。当然同时还要动态考虑内容的时效性、跟我当前的阶段的适配性，用户的偏好等等方面。
+# Alice — AI Secretary
 
-# 内容推送
-推送过来的内容应该是这样的：
+> 当前仓库的**唯一可信运行手册**（以代码为准，持续同步更新）。
 
-首先是ai对这份内容的简单的概括和核心观点、内容的陈述，避免标题党和讲故事的叙述，同时要讲清楚推送的原因
+## 0. 当前实现快照（2026-02-27）
 
-原因可能是（仅作为举例）：
-- 用户当前正在进行某项工作，而这份内容刚好可以给用户带来一些新的启发和思考
-- 这份内容具有一些普适性的东西，值得思考和品味
-- 这份内容契合用户当前的知识阶段，可以作为用户知识系统中的某个节点的拓展
-- 这份内容比较新颖和有影响力，可以作为
+Alice 是一个个人智能信息管理系统，当前仓库已经包含可运行的：
 
-# 内容的一些分类：
-- 硬核知识类：高质量技术/科研博客、高质量论文分析和讲解、高质量论文本身、高质量科普视频（用于拓展用户的知识边界）、高质量的stack overflow、reddit、知乎技术或知识讨论、高质量的公众号文章
-  - 这部分内容是用于用户的知识扩展的这个目的，是为了完善和推进补充用户的个人的知识系统，用户查看了内容并与系统进行互动之后可以在系统维护的知识系统进行更新
-  - 互动包括：1.用户看了之后觉得很有价值而且学到了新东西，那么维护的用户的知识系统就可以进行更新，后续的推送也会参考这个维护的知识系统2.用户决定把这个内容留到后面再看，就把这个内容放到排序器的后面，然后后续再进行推送3.用户认为该内容没有什么价值，是垃圾信息或者是用户已经知晓了推送中的内容等，整个系统就要更新用户的偏好画像等，以后要尽量减少此类内容的推送而且随着不断的迭代最终系统的推送能几乎做到所有推送的内容都要让用户觉得推送是高质量的
-  - 筛选标准：不是标题党，要有实质性内容，能够为用户带来新知识，新启发，内容的质量要高，不是纯讲故事，要让用户看完之后有所收获，从而补充完善用户的知识系统
+- FastAPI 后端 API（`/api/v1/*`）
+- aiogram Bot 独立服务（webhook + feedback callback）
+- Celery Worker + Beat（分阶段任务，不使用 chain）
+- PostgreSQL / Redis / Meilisearch / Neo4j
+- Next.js 前端（Feed / Search / Settings / Login）
 
-- 思想性的内容：
-  - 这部分内容并不是讲解某些技术或者知识，而是提供了一些新的思想性的内容，可以引发用户的思考，为用户带来更多的启发等等
-  - 思想性的内容是作为知识系统一个更加高层次的东西，例如很多技术或者方法都是基于同样的思想进行，或者是受到了相同的思想的启发，是知识系统之上的用来建模用户画像的更高层次的内容
-  - 筛选标准：有启发性，有影响力，有思想性，用户并不知晓，用于提升用户的认知水平
+已落地的数据源：
 
-- 时效信息类：关注的开源项目（如vLLM或相关框架）发布了重大更新、某个重要的学术会议Deadline临近、或者某个AI领域的突发大新闻
-  - 这部分内容系统只需要提取“发生了什么（What）”以及“对我有什么影响（Impact）”
-  - 推送形式： 一句话总结 + 变更日志/核心要点提取，附带原文链接。看完即焚，不一定需要进入深度知识库。
+- `rss`
+- `arxiv`
 
-# 智能推送
-系统在推送的时候不要只推送内容本身
-- 例如在推送硬核知识类内容的时候可以通过ai生成来补充前置知识（所需的不多的情况的，如果看懂该内容用户还需要学习大量的前置知识的话就说明该内容还不适合用户的当前阶段，需要放到后面再推送）或者是加上一些之前推送过的的一些内容（或者新内容[是讲解前置知识的]）用来相互的印证，方便用户相互联系从而进行学习。当然用户阅读过后就可以自动把已经学习到的内容包括前置知识建模整合到维护的知识体系中。
-- 还可以补充上阅读建议，比如用户只需要阅读某个部分或者是建议用户全面精读等等，同时用户还可以针对阅读建议进行反馈方便后续的针对阅读建议的更精确的优化
+已落地核心链路：
 
-# 知识表示与存储引擎优化
-为了让系统真正知道你“懂什么”和“缺什么”，单纯的向量数据库是不够的。
-引入实体与关系映射： 建议采用结合了知识图谱的检索增强生成（GraphRAG）架构。比如，系统记录了你已经掌握了某个底层的数学推导或系统架构设计，当新论文出现时，系统可以明确地告诉你：“这篇论文的方法是建立在你之前看过的X理论基础上的，它仅仅在Y环节做了改进。”
-记忆分层结构：像构建高吞吐量系统一样构建你的秘书记忆。分为工作记忆（当前正在攻克的科研难题或项目）、短期记忆（最近一周的阅读偏好）和长期核心记忆（你已经内化的高阶数学、物理和计算机基础）。可以参考类似 MemGPT (Letta) 或 LlamaIndex 的多层记忆管理机制。
+- source 创建 -> 拉取 -> 入库 -> gatekeeper -> understanding -> graph extraction -> scoring -> indexing -> push
 
-# 破除信息茧房
-引入“探索与利用”机制。由于系统会根据你的点赞不断收敛，最后可能会导致你只能看到你想看的东西（信息茧房）。可以在推送排序器中引入类似强化学习中的$\epsilon$-greedy策略。比如保留5%到10%的推流权重，专门用来推送打破你当前认知边界、跨学科的高质量内容，或者偶尔推一些完全不同领域的硬核科普。这能带来意想不到的启发。
+## 1. 技术栈与服务端口
 
-高质量的输入最终是为了输出。一个好的秘书不仅帮你整理资料，还应该帮你准备报告和文章。
+| Service | Stack | Port |
+| --- | --- | --- |
+| `api` | FastAPI + Uvicorn | `8000` |
+| `bot` | aiogram + aiohttp webhook | `8081` |
+| `worker` | Celery worker | - |
+| `scheduler` | Celery beat | - |
+| `postgres` | PostgreSQL 16 | `5432` |
+| `redis` | Redis 7 (AOF enabled) | `6379` |
+| `meilisearch` | Meilisearch v1.6 | `7700` |
+| `neo4j` | Neo4j 5 | `7474` / `7687` |
 
-# 自动归档与总结报告生成
-当你在Telegram上对某个系列的话题（比如几篇关于 AI Agent 的深度文章）都点了赞并积累了心得后，系统可以在周末自动为你生成一份Markdown报告草稿并自动转为pdf格式，作为用户一段时间的学习总结推送给用户
+## 2. 目录结构（与当前代码一致）
 
-# 结合情境的动态推送
-时间窗与精力管理：秘书应该知道你什么时候适合看什么。比如，工作日的上午10点，推送与当前手头代码或科研直接相关的高价值硬核论文；晚上 11点，推送轻松的科技资讯、高质量的思想性随笔。
+```text
+alice/
+├── README.md
+├── DESIGN.md
+├── AGENTS.md
+├── docker-compose.yml
+├── docker-compose.test.yml
+├── pyproject.toml
+├── alembic/
+├── prompts/                # Jinja2 prompt templates (*.j2)
+├── src/alice/
+│   ├── api/v1/             # content/sources/pipeline/search/settings/feedback/connectors
+│   ├── bot/                # Telegram bot webhook service
+│   ├── config/
+│   ├── connectors/         # rss + arxiv
+│   ├── graph/
+│   ├── llm/                # deepseek / ollama / mock
+│   ├── models/
+│   ├── pipeline/           # active celery tasks
+│   ├── schemas/
+│   ├── services/
+│   ├── worker/             # legacy task-name compatibility + celery app
+│   ├── db.py
+│   ├── main.py
+│   └── prompts.py
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── fixtures/
+└── frontend/
+    ├── src/
+    ├── e2e/
+    └── package.json
+```
 
-# 用户自定义推送
-项目驱动模式： 允许用户向系统输入“我最近一个月在集中攻关/开发某个特定功能”。系统会自动将抓取到的所有相关内容权重拉满，进入“战时状态”。
+## 3. 环境变量（真实可运行配置）
 
-# “追问”机制
-在Telegram推送的卡片下方，除了“高质量内容/稍后再看/无价值/用户已经知晓该内容”，还可以增加一个**“给我解释一下其中的X概念”**按钮，直接触发一轮QA对话，而不是仅仅停留在单向推送。
+先复制：
 
-# 认知衰退提醒
-根据艾宾浩斯遗忘曲线，对于你标记为“高价值”但很久没回顾的硬核知识，系统可以在适当的时候以“温故知新”的理由再次推送它。
+```bash
+cp .env.example .env
+```
 
-# 项目架构
-## 前置清洗管道
-在信息进入你的优先级排序器之前，部署一个轻量级但逻辑严密的本地模型（或者低成本API），让它扮演“无情审核员”。你可以给它设定很高的标准（例如：是否有实证数据支撑？逻辑链条是否完整？是否是纯情绪输出？），对于不达标的“垃圾信息”直接在管道前端拦截，避免污染优质模型和用户处理信息时候的注意力。
+推荐本机开发 `.env`（Python 服务运行在宿主机）示例：
 
-## 系统配置
-可以给系统配置好不同的更新skills，当用户提供不同的反馈的时候可以执行不同的skill来对整个系统进行不同层级的更新
+```dotenv
+# Core
+DATABASE_URL=postgresql+asyncpg://alice:alice@localhost:5432/alice?ssl=disable
+CELERY_BROKER_URL=redis://localhost:6379/0
+REDIS_URL=redis://localhost:6379/0
+LOG_LEVEL=INFO
+DEBUG=false
 
+# Auth
+ALICE_API_KEY=alicesecret
 
-## 用户知识图谱与内容子图
-维护一个不断更新和迭代的用户知识图谱，同时处理每一条新的内容的时候为每个内容生成一个该内容的子图，当该内容的子图和用户的知识图谱相[匹配]（也就是说当前的内容推荐给用户的时候用户能够看懂或者说适合用户当前的阶段）的时候就是适合的内容
+# LLM
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+OLLAMA_HOST=http://host.docker.internal:11434
 
-## 前端管理
-需要一个优秀的前端来管理整个系统
+# Telegram
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_WEBHOOK_HOST=
+
+# Search / Graph
+MEILISEARCH_URL=http://localhost:7700
+MEILISEARCH_API_KEY=masterKey
+NEO4J_URI=bolt://localhost:7687
+NEO4J_AUTH=neo4j/alice_neo4j
+
+# Frontend rewrite target
+API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=
+```
+
+说明：
+
+- `docker-compose.yml` 已对容器内服务地址做覆盖（`postgres`/`redis`/`meilisearch`/`neo4j`），不会受你本机 `.env` 中 `localhost` 写法影响。
+- `ALICE_API_KEY` 是后端 `/api/*` 的强制鉴权密钥，前后端都要一致。
+- 生产环境请务必替换所有默认密钥和密码。
+
+## 4. 启动方式 A（推荐）: Docker 跑后端全家桶 + 本机跑前端
+
+### 4.1 启动后端与基础设施
+
+不需要 Bot：
+
+```bash
+docker compose up -d postgres redis meilisearch neo4j api worker scheduler
+```
+
+需要 Bot：
+
+```bash
+docker compose up -d
+```
+
+### 4.2 执行迁移
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+### 4.3 基础健康检查
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8081/health
+```
+
+## 5. API 鉴权（必须）
+
+后端中间件要求：`/api/*` 必须带 `X-API-Key`。
+
+```bash
+export ALICE_API_KEY=alicesecret
+```
+
+示例：
+
+```bash
+curl -X POST http://localhost:8000/api/v1/sources \
+  -H "X-API-Key: ${ALICE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"HN RSS","url":"https://hnrss.org/frontpage","type":"rss"}'
+
+curl "http://localhost:8000/api/v1/content?limit=20&offset=0&sort=relevance" \
+  -H "X-API-Key: ${ALICE_API_KEY}"
+
+curl -X POST http://localhost:8000/api/v1/pipeline/fetch/trigger \
+  -H "X-API-Key: ${ALICE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+curl "http://localhost:8000/api/v1/pipeline/status" \
+  -H "X-API-Key: ${ALICE_API_KEY}"
+```
+
+## 6. 启动方式 B: 本机多进程运行 Python 服务
+
+### 6.1 先启动基础设施
+
+```bash
+docker compose up -d postgres redis meilisearch neo4j
+```
+
+### 6.2 安装依赖 + 迁移
+
+```bash
+uv sync --extra dev
+uv run alembic upgrade head
+```
+
+### 6.3 分终端启动
+
+```bash
+# API
+uv run uvicorn alice.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Worker
+uv run celery -A alice.worker.celery_app worker --loglevel=info -Q celery,pipeline,fetch,push --pool=threads --concurrency=4
+
+# Beat
+uv run celery -A alice.worker.celery_app beat --loglevel=info
+
+# Bot (可选)
+uv run python -m alice.bot.main
+```
+
+## 7. 前端启动与登录
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+- 打开 `http://localhost:3000/login`
+- 输入与后端一致的 `ALICE_API_KEY`
+- 登录后进入 Feed / Search / Settings
+
+## 8. 测试策略（真实环境优先）
+
+### 8.1 单元测试
+
+```bash
+uv run pytest tests/unit -v
+cd frontend && npm run test
+```
+
+### 8.2 后端集成测试（真实 PostgreSQL / 可选 Neo4j）
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+export TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5433/alice_test"
+uv run pytest tests/integration -m integration -v
+```
+
+Phase 2 图谱相关测试需再设置：
+
+```bash
+export NEO4J_TEST_URI="bolt://localhost:7687"
+export NEO4J_TEST_USER="neo4j"
+export NEO4J_TEST_PASS="alice_neo4j"
+```
+
+### 8.3 前端 E2E
+
+```bash
+cd frontend
+npm run test:e2e
+```
+
+说明：
+
+- 当前 integration 套件中，部分用例仍会对外部网络/Celery dispatch 做隔离（patch），这是历史兼容做法。
+- 按本仓库开发原则，新增或重构关键链路时必须补充“真实依赖接入”的验收测试，不允许只做 mock 路径验证。
+
+## 9. 强制开发原则（本仓库执行标准）
+
+1. 测试驱动必须引入真实数据和真实环境运行，不能只停留在纯单元测试。
+2. 新模块开发必须与原系统集成验证，禁止“只写模块不接入主流程”。
+3. 生产路径禁止模拟逻辑，必须使用真实运行逻辑。
+4. 相关配置必须是生产可运行的真实配置，禁止杜撰参数。
+5. 禁止以 `TODO` 注释替代实现，需求必须完整落地。
+
+## 10. 常见问题
+
+- `401 Invalid API key`
+  - 请求缺少 `X-API-Key` 或密钥不一致。
+- `Database schema mismatch`
+  - 运行 `uv run alembic upgrade head`（或 `docker compose exec api alembic upgrade head`）。
+- Search 503
+  - 检查 `meilisearch` 服务状态和 `MEILISEARCH_URL`。
+
+## 11. 常用命令速查
+
+```bash
+# Backend
+uv sync --extra dev
+uv run ruff check .
+uv run pytest
+uv run alembic upgrade head
+
+# Docker
+docker compose up -d
+docker compose logs -f api
+docker compose logs -f worker
+docker compose down
+
+# Frontend
+cd frontend
+npm run lint
+npm run typecheck
+npm run test
+npm run test:e2e
+```

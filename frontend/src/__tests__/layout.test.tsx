@@ -9,11 +9,21 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/feed',
+}));
+
 vi.mock('@/lib/store', () => ({
   useSidebarStore: () => ({
     isOpen: true,
     toggleSidebar: vi.fn(),
   }),
+}));
+
+vi.mock('@/lib/api', () => ({
+  apiClient: {
+    getSources: vi.fn().mockResolvedValue([]),
+  },
 }));
 
 describe('Sidebar', () => {

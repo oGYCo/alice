@@ -51,12 +51,25 @@ class TestStaticBeatSchedule:
         """BEAT_SCHEDULE must include retry-failed-content entry."""
         assert "retry-failed-content" in BEAT_SCHEDULE
 
+    def test_beat_schedule_retry_failed_is_6_hours(self):
+        """retry-failed-content schedule should be 21600.0 seconds (6 hours)."""
+        assert BEAT_SCHEDULE["retry-failed-content"]["schedule"] == 21600.0
+
+    def test_beat_schedule_has_batch_p_scores(self):
+        """BEAT_SCHEDULE must include batch-update-p-scores-daily entry."""
+        assert "batch-update-p-scores-daily" in BEAT_SCHEDULE
+
+    def test_beat_schedule_batch_p_scores_is_daily(self):
+        """batch-update-p-scores-daily schedule should be 86400.0 seconds (24h)."""
+        assert BEAT_SCHEDULE["batch-update-p-scores-daily"]["schedule"] == 86400.0
+
     def test_get_beat_schedule_returns_dict(self):
         """get_beat_schedule() returns the static schedule dict."""
         schedule = get_beat_schedule()
         assert isinstance(schedule, dict)
         assert "fetch-all-sources" in schedule
         assert "retry-failed-content" in schedule
+        assert "batch-update-p-scores-daily" in schedule
 
 
 # ---------------------------------------------------------------------------
@@ -148,8 +161,8 @@ class TestGetDynamicSchedule:
 
         schedule = await get_dynamic_schedule(session)
 
-        # Only the 2 static entries
-        assert len(schedule) == 2
+        # 3 static entries: fetch-all-sources, retry-failed-content, batch-update-p-scores-daily
+        assert len(schedule) == 3
 
     async def test_dynamic_schedule_source_entry_has_kwargs_with_source_id(self):
         """Per-source entry includes kwargs with source_id."""

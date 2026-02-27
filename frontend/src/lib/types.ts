@@ -87,6 +87,22 @@ export interface SearchHit {
   };
 }
 
+export interface HybridSearchHit {
+  content_id: string;
+  score: number;
+  source: string;
+  graph_score: number;
+  text_score: number;
+  semantic_score: number;
+}
+
+export interface HybridSearchResult {
+  results: HybridSearchHit[];
+  total: number;
+  query: string;
+  mode: string;
+}
+
 export type UserMode = 'daily' | 'project' | 'explore' | 'low_energy';
 
 export type ScheduleSlotName = 'morning' | 'work' | 'lunch' | 'evening' | 'late_night' | 'weekend';

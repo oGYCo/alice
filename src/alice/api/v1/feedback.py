@@ -105,4 +105,47 @@ async def create_feedback(
     session.add(feedback)
     await session.commit()
     await session.refresh(feedback)
+
+    # Dispatch async KG update (non-blocking)
+    _dispatch_kg_update(
+        user_id=body.user_id,
+        content_id=body.content_id,
+        feedback_type=body.feedback_type,
+    )
+
     return feedback
+
+
+# ---------------------------------------------------------------------------
+# KG update dispatch
+# ---------------------------------------------------------------------------
+
+# Map frontend feedback types to KGUpdater-compatible types
+_KG_FEEDBACK_MAP: dict[str, str] = {
+    "positive": "positive",
+    "valuable_learned": "positive",
+    "negative": "negative",
+    "not_valuable": "negative",
+    "seen": "seen",
+    "already_known": "seen",
+    "save_for_later": "save_for_later",
+}
+
+
+def _dispatch_kg_update(*, user_id: int, content_id: int, feedback_type: str) -> None:
+    """Fire-and-forget Celery task to update user KG after feedback."""
+    kg_type = _KG_FEEDBACK_MAP.get(feedback_type, feedback_type)
+    try:
+        from alice.pipeline.tasks import task_kg_feedback_update  # noqa: PLC0415
+
+        task_kg_feedback_update.delay(user_id, content_id, kg_type)
+    except Exception:
+        # Best-effort: if Celery is unreachable the feedback is still saved
+        import structlog  # noqa: PLC0415
+
+        structlog.get_logger(__name__).warning(
+            "kg_update_dispatch_failed",
+            user_id=user_id,
+            content_id=content_id,
+            exc_info=True,
+        )

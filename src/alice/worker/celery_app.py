@@ -16,9 +16,10 @@ def reset_db_pool(**kwargs: object) -> None:
     completely avoids "Future attached to a different loop" and
     InterfaceError races.
     """
-    import alice.db as db_module
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool
+
+    import alice.db as db_module
 
     # Abandon (don't try to close) inherited connections from the parent process.
     db_module.engine.sync_engine.dispose(close=False)
@@ -57,6 +58,8 @@ def create_celery_app() -> Celery:
             "alice.pipeline.tasks.task_run_scoring": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_run_indexing": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_retry_failed": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_batch_update_p_scores": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_kg_feedback_update": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_push_batch": {"queue": "push"},
             # Legacy compatibility routes (old stub task names).
             "alice.worker.tasks.task_run_gatekeeper": {"queue": "pipeline"},
@@ -73,9 +76,14 @@ def create_celery_app() -> Celery:
                 "schedule": 1800.0,  # 30 minutes in seconds
                 "options": {"queue": "fetch"},
             },
-            "retry-failed-content-every-hour": {
+            "retry-failed-every-6-hours": {
                 "task": "alice.pipeline.tasks.task_retry_failed",
-                "schedule": 3600.0,  # 1 hour in seconds
+                "schedule": 21600.0,  # 6 hours
+                "options": {"queue": "pipeline"},
+            },
+            "batch-update-p-scores-daily": {
+                "task": "alice.pipeline.tasks.task_batch_update_p_scores",
+                "schedule": 86400.0,  # 24 hours
                 "options": {"queue": "pipeline"},
             },
         },

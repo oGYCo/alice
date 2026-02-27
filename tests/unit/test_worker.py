@@ -119,6 +119,10 @@ def test_beat_schedule_configured():
     schedule = celery_app.conf.beat_schedule
     assert "fetch-all-sources-every-30-min" in schedule
     assert schedule["fetch-all-sources-every-30-min"]["schedule"] == 1800.0
+    assert "retry-failed-every-6-hours" in schedule
+    assert schedule["retry-failed-every-6-hours"]["schedule"] == 21600.0
+    assert "batch-update-p-scores-daily" in schedule
+    assert schedule["batch-update-p-scores-daily"]["schedule"] == 86400.0
 
 
 def test_celery_serialization_json():

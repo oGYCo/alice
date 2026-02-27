@@ -1,4 +1,4 @@
-import type { ContentItem, ContentDetail, SearchResult, SearchHit, Source, PushPreferences, DashboardStats, KGGraph, KGCommunity, KGGapAnalysis } from './types';
+import type { ContentItem, ContentDetail, SearchResult, SearchHit, HybridSearchResult, Source, PushPreferences, DashboardStats, KGGraph, KGCommunity, KGGapAnalysis } from './types';
 import { useAuthStore } from './store';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -101,6 +101,24 @@ export class AliceApiClient {
     );
     return raw.suggestions;
   }
+
+  async hybridSearch(
+    q: string,
+    options: { mode?: string; user_id?: number; limit?: number } = {},
+  ): Promise<HybridSearchResult> {
+    const { mode = 'hybrid', user_id = 1, limit = 10 } = options;
+    const params = new URLSearchParams({
+      q,
+      mode,
+      user_id: String(user_id),
+      limit: String(limit),
+    });
+    return this.request<HybridSearchResult>(
+      `/api/v1/search/hybrid?${params.toString()}`,
+      { method: 'POST' },
+    );
+  }
+
   async getFeed(page = 1, limit = 20, sort = 'relevance'): Promise<ContentItem[]> {
     const safePage = Math.max(1, page);
     const offset = (safePage - 1) * limit;

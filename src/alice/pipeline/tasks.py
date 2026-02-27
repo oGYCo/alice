@@ -265,6 +265,11 @@ def task_run_graph_extraction(self, content_id: int) -> dict:
                         summary=summary,
                         key_points=key_points,
                     )
+                    # Persist difficulty on the Neo4j Content node for later matching
+                    await graph_client.execute_query(
+                        "MATCH (c:Content {id: $id}) SET c.difficulty = $diff",
+                        {"id": content_id, "diff": subgraph.difficulty},
+                    )
                     logger.info(
                         "graph_extraction_complete",
                         extra={
@@ -396,6 +401,25 @@ def task_run_indexing(self, content_id: int) -> dict:
                 )
                 raise self.retry(exc=exc)
 
+            # Compute initial p_score (base: r_relevance=1.0, no user context)
+            try:
+                from alice.services.ranking import RankingService  # noqa: PLC0415
+
+                ranking_svc = RankingService()
+                await ranking_svc.update_p_score(session, content)
+                await session.commit()
+                logger.info(
+                    "indexing_p_score_set",
+                    extra={"content_id": content_id, "p_score": content.p_score},
+                )
+            except Exception:
+                # p_score computation is best-effort — do not fail indexing
+                logger.warning(
+                    "indexing_p_score_failed",
+                    extra={"content_id": content_id},
+                    exc_info=True,
+                )
+
             logger.info(
                 "indexing_complete",
                 extra={"content_id": content_id},
@@ -455,6 +479,103 @@ def task_retry_failed(self) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Maintenance: batch update p_scores for indexed content
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="alice.pipeline.tasks.task_batch_update_p_scores",
+)
+def task_batch_update_p_scores(self) -> dict:
+    """Periodic task: recompute p_score for all indexed (unpushed) content.
+
+    Accounts for time-decay so older content's p_score naturally decreases.
+    Triggered by Celery Beat daily.
+    """
+
+    async def _run() -> dict:
+        from alice.services.ranking import RankingService  # noqa: PLC0415
+
+        async with AsyncSessionLocal() as session:
+            ranking_svc = RankingService()
+            updated = await ranking_svc.batch_update_p_scores(session, limit=500)
+            logger.info(
+                "batch_p_scores_complete",
+                extra={"updated": updated},
+            )
+            return {"updated": updated}
+
+    return asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# Maintenance: KG update on user feedback
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="alice.pipeline.tasks.task_kg_feedback_update",
+    max_retries=2,
+    retry_backoff=True,
+)
+def task_kg_feedback_update(
+    self, user_id: int, content_id: int, feedback_type: str
+) -> dict:
+    """Async task: update the user knowledge graph on feedback.
+
+    Called from the feedback API endpoint so KG writes don't block
+    the HTTP response.
+    """
+
+    async def _run() -> dict:
+        graph_client = _create_graph_client()
+        await graph_client.connect()
+        try:
+            from alice.services.kg_updater import KGUpdater  # noqa: PLC0415
+
+            llm_client = create_llm_client("deepseek")
+            updater = KGUpdater(graph_client, llm_client)
+            result = await updater.update_on_feedback(
+                user_id=user_id,
+                content_id=content_id,
+                feedback_type=feedback_type,
+            )
+            logger.info(
+                "kg_feedback_update_complete",
+                extra={
+                    "user_id": user_id,
+                    "content_id": content_id,
+                    "feedback_type": feedback_type,
+                    "concepts_updated": len(result.concepts_updated),
+                    "success": result.success,
+                },
+            )
+            return {
+                "user_id": user_id,
+                "content_id": content_id,
+                "feedback_type": feedback_type,
+                "concepts_updated": result.concepts_updated,
+                "success": result.success,
+            }
+        except Exception as exc:
+            logger.error(
+                "kg_feedback_update_error",
+                extra={
+                    "user_id": user_id,
+                    "content_id": content_id,
+                    "error": str(exc),
+                },
+            )
+            raise self.retry(exc=exc)
+        finally:
+            await graph_client.close()
+
+    return asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
 # Push batch delivery
 # ---------------------------------------------------------------------------
 
@@ -480,7 +601,29 @@ def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5) -> dict:
     async def _run() -> dict:
         async with AsyncSessionLocal() as session:
             svc = PushService()
-            content_list = await svc.get_next_push_batch(session, user_id=user_id, limit=limit)
+
+            # Attempt to personalise push with KG matching (graceful degradation)
+            graph_client = None
+            try:
+                graph_client = _create_graph_client()
+                await graph_client.connect()
+            except Exception:
+                logger.warning(
+                    "push_batch_graph_unavailable",
+                    extra={"user_id": user_id},
+                )
+                graph_client = None
+
+            try:
+                content_list = await svc.get_next_push_batch(
+                    session,
+                    user_id=user_id,
+                    limit=limit,
+                    graph_client=graph_client,
+                )
+            finally:
+                if graph_client:
+                    await graph_client.close()
 
             if not content_list:
                 logger.info(

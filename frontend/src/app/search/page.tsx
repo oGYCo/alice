@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Search, X, SlidersHorizontal, Clock, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import type { SearchHit } from '@/lib/types';
+import type { SearchHit, HybridSearchHit } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,11 @@ const CONTENT_TYPE_LABELS: Record<string, string> = {
     news: '时效信息',
     time_sensitive: '时效信息',
 };
+
+const SEARCH_MODE_OPTIONS = [
+    { value: 'simple', label: '全文搜索' },
+    { value: 'hybrid', label: '智能搜索' },
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -151,6 +156,41 @@ function SearchResultCard({ hit }: { hit: SearchHit }) {
     );
 }
 
+// ── Hybrid search result card ─────────────────────────────────────────────────
+
+function HybridResultCard({ hit }: { hit: HybridSearchHit }) {
+    const sourceLabels: Record<string, string> = {
+        graph: '图谱',
+        text: '全文',
+        semantic: '语义',
+    };
+    const sources = hit.source.split(',').map(s => sourceLabels[s.trim()] ?? s.trim());
+
+    return (
+        <article className="group border-b border-border last:border-0 py-5 first:pt-0">
+            <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
+                {sources.map((s, i) => (
+                    <span key={i} className="px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                        {s}
+                    </span>
+                ))}
+                <span>·</span>
+                <span>综合分 <strong className="text-foreground">{hit.score.toFixed(3)}</strong></span>
+            </div>
+            <Link href={`/content/${hit.content_id}`} className="block group/link">
+                <h2 className="font-semibold text-[16px] leading-snug mb-1.5 group-hover/link:text-primary transition-colors">
+                    内容 #{hit.content_id}
+                </h2>
+            </Link>
+            <div className="flex gap-3 text-xs text-muted-foreground">
+                {hit.graph_score > 0 && <span>图谱: {hit.graph_score.toFixed(3)}</span>}
+                {hit.text_score > 0 && <span>全文: {hit.text_score.toFixed(3)}</span>}
+                {hit.semantic_score > 0 && <span>语义: {hit.semantic_score.toFixed(3)}</span>}
+            </div>
+        </article>
+    );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 function SearchInner() {
@@ -169,12 +209,16 @@ function SearchInner() {
     const [showFilters, setShowFilters] = useState(!!(initialType || initialMinScore));
 
     const [hits, setHits] = useState<SearchHit[]>([]);
+    const [hybridHits, setHybridHits] = useState<HybridSearchHit[]>([]);
     const [total, setTotal] = useState(0);
     const [offset, setOffset] = useState(0);
     const [loading, setLoading] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(!!initialQ);
+    const [searchMode, setSearchMode] = useState<'simple' | 'hybrid'>(
+        (searchParams.get('mode') as 'simple' | 'hybrid') ?? 'simple',
+    );
 
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -185,11 +229,12 @@ function SearchInner() {
     const suggestionsRef = useRef<HTMLUListElement>(null);
 
     // ── Sync URL ────────────────────────────────────────────────────────────────
-    const updateURL = useCallback((q: string, type: string, minScore: number | undefined) => {
+    const updateURL = useCallback((q: string, type: string, minScore: number | undefined, mode: string = 'simple') => {
         const params = new URLSearchParams();
         if (q) params.set('q', q);
         if (type) params.set('type', type);
         if (minScore !== undefined) params.set('min_score', String(minScore));
+        if (mode !== 'simple') params.set('mode', mode);
         const qs = params.toString();
         router.replace(`/search${qs ? `?${qs}` : ''}`, { scroll: false });
     }, [router]);
@@ -201,9 +246,11 @@ function SearchInner() {
         minScore: number | undefined,
         searchOffset: number,
         append = false,
+        mode: 'simple' | 'hybrid' = 'simple',
     ) => {
         if (!q.trim()) {
             setHits([]);
+            setHybridHits([]);
             setTotal(0);
             setOffset(0);
             setHasSearched(false);
@@ -212,19 +259,28 @@ function SearchInner() {
         if (append) setLoadingMore(true); else setLoading(true);
         setError(null);
         try {
-            const result = await apiClient.searchContent(q, {
-                limit: PAGE_SIZE,
-                offset: searchOffset,
-                type: type || undefined,
-                min_score: minScore,
-            });
-            if (append) {
-                setHits(prev => [...prev, ...result.hits]);
+            if (mode === 'hybrid') {
+                const result = await apiClient.hybridSearch(q, { mode: 'hybrid', limit: PAGE_SIZE });
+                setHybridHits(result.results);
+                setHits([]);
+                setTotal(result.total);
+                setOffset(0);
             } else {
-                setHits(result.hits);
+                const result = await apiClient.searchContent(q, {
+                    limit: PAGE_SIZE,
+                    offset: searchOffset,
+                    type: type || undefined,
+                    min_score: minScore,
+                });
+                if (append) {
+                    setHits(prev => [...prev, ...result.hits]);
+                } else {
+                    setHits(result.hits);
+                }
+                setHybridHits([]);
+                setTotal(result.total);
+                setOffset(searchOffset);
             }
-            setTotal(result.total);
-            setOffset(searchOffset);
             setHasSearched(true);
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Search failed';
@@ -261,8 +317,8 @@ function SearchInner() {
         debounceTimerRef.current = setTimeout(() => {
             const q = value.trim();
             setActiveQuery(q);
-            updateURL(q, selectedType, selectedMinScore);
-            runSearch(q, selectedType, selectedMinScore, 0, false);
+            updateURL(q, selectedType, selectedMinScore, searchMode);
+            runSearch(q, selectedType, selectedMinScore, 0, false, searchMode);
         }, DEBOUNCE_MS);
     };
 
@@ -273,8 +329,8 @@ function SearchInner() {
         setActiveQuery(suggestion);
         setShowSuggestions(false);
         setSuggestions([]);
-        updateURL(suggestion, selectedType, selectedMinScore);
-        runSearch(suggestion, selectedType, selectedMinScore, 0, false);
+        updateURL(suggestion, selectedType, selectedMinScore, searchMode);
+        runSearch(suggestion, selectedType, selectedMinScore, 0, false, searchMode);
     };
 
     // ── Clear search ─────────────────────────────────────────────────────────────
@@ -283,11 +339,12 @@ function SearchInner() {
         setInputValue('');
         setActiveQuery('');
         setHits([]);
+        setHybridHits([]);
         setTotal(0);
         setHasSearched(false);
         setShowSuggestions(false);
         setSuggestions([]);
-        updateURL('', selectedType, selectedMinScore);
+        updateURL('', selectedType, selectedMinScore, searchMode);
         inputRef.current?.focus();
     };
 
@@ -296,17 +353,26 @@ function SearchInner() {
         setSelectedType(type);
         setSelectedMinScore(minScore);
         if (activeQuery.trim()) {
-            updateURL(activeQuery, type, minScore);
-            runSearch(activeQuery, type, minScore, 0, false);
+            updateURL(activeQuery, type, minScore, searchMode);
+            runSearch(activeQuery, type, minScore, 0, false, searchMode);
         } else {
-            updateURL(inputValue.trim(), type, minScore);
+            updateURL(inputValue.trim(), type, minScore, searchMode);
+        }
+    };
+
+    // ── Mode change ───────────────────────────────────────────────────────────────
+    const handleModeChange = (mode: 'simple' | 'hybrid') => {
+        setSearchMode(mode);
+        if (activeQuery.trim()) {
+            updateURL(activeQuery, selectedType, selectedMinScore, mode);
+            runSearch(activeQuery, selectedType, selectedMinScore, 0, false, mode);
         }
     };
 
     // ── Load more ────────────────────────────────────────────────────────────────
     const loadMore = () => {
         const nextOffset = offset + PAGE_SIZE;
-        runSearch(activeQuery, selectedType, selectedMinScore, nextOffset, true);
+        runSearch(activeQuery, selectedType, selectedMinScore, nextOffset, true, searchMode);
     };
 
     // ── Keyboard — close suggestions on Escape ───────────────────────────────────
@@ -337,7 +403,7 @@ function SearchInner() {
     // ── Initial search if URL has query ──────────────────────────────────────────
     useEffect(() => {
         if (initialQ.trim()) {
-            runSearch(initialQ, initialType, initialMinScore, 0, false);
+            runSearch(initialQ, initialType, initialMinScore, 0, false, searchMode);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -366,8 +432,8 @@ function SearchInner() {
                             const q = inputValue.trim();
                             setActiveQuery(q);
                             setShowSuggestions(false);
-                            updateURL(q, selectedType, selectedMinScore);
-                            runSearch(q, selectedType, selectedMinScore, 0, false);
+                            updateURL(q, selectedType, selectedMinScore, searchMode);
+                            runSearch(q, selectedType, selectedMinScore, 0, false, searchMode);
                         }
                     }}
                     autoComplete="off"
@@ -408,6 +474,24 @@ function SearchInner() {
 
             {/* Filter bar */}
             <div className="flex items-center gap-2 mb-6">
+                {/* Search mode toggle */}
+                <div className="flex rounded-lg border border-border overflow-hidden mr-2">
+                    {SEARCH_MODE_OPTIONS.map(opt => (
+                        <button
+                            key={opt.value}
+                            onClick={() => handleModeChange(opt.value as 'simple' | 'hybrid')}
+                            className={cn(
+                                'px-3 py-1 text-xs font-medium transition-colors',
+                                searchMode === opt.value
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'hover:bg-accent'
+                            )}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+
                 <Button
                     variant={showFilters ? 'secondary' : 'ghost'}
                     size="sm"
@@ -520,15 +604,26 @@ function SearchInner() {
                     <p className="text-xs text-muted-foreground mb-4">
                         {total === 0
                             ? `未找到与 "${activeQuery}" 相关的结果`
-                            : `找到约 ${total} 条结果，显示 ${hits.length} 条`
+                            : searchMode === 'hybrid'
+                                ? `智能搜索找到 ${hybridHits.length} 条结果`
+                                : `找到约 ${total} 条结果，显示 ${hits.length} 条`
                         }
                     </p>
 
-                    {/* Hit list */}
-                    {hits.length > 0 && (
+                    {/* Hit list — simple mode */}
+                    {searchMode === 'simple' && hits.length > 0 && (
                         <div className="divide-y divide-border rounded-xl border border-border px-5">
                             {hits.map(hit => (
                                 <SearchResultCard key={hit.id} hit={hit} />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Hit list — hybrid mode */}
+                    {searchMode === 'hybrid' && hybridHits.length > 0 && (
+                        <div className="divide-y divide-border rounded-xl border border-border px-5">
+                            {hybridHits.map(hit => (
+                                <HybridResultCard key={hit.content_id} hit={hit} />
                             ))}
                         </div>
                     )}

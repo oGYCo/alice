@@ -24,7 +24,12 @@ BEAT_SCHEDULE = {
     },
     "retry-failed-content": {
         "task": "alice.pipeline.tasks.task_retry_failed",
-        "schedule": 3600.0,  # 1 hour
+        "schedule": 21600.0,  # 6 hours
+        "options": {"queue": "pipeline"},
+    },
+    "batch-update-p-scores-daily": {
+        "task": "alice.pipeline.tasks.task_batch_update_p_scores",
+        "schedule": 86400.0,  # 24 hours
         "options": {"queue": "pipeline"},
     },
 }

@@ -116,3 +116,57 @@ export interface ApiError {
   detail: string;
   status: number;
 }
+
+// Dashboard types
+export interface WeeklyVelocity {
+  week: string;
+  count: number;
+}
+
+export interface KnowledgeGrowthPoint {
+  week: string;
+  total_nodes: number;
+  new_nodes: number;
+  mastered_nodes: number;
+}
+
+export interface MemoryTierStats {
+  working: number;
+  short_term: number;
+  long_term: number;
+}
+
+export interface CommunityInfo {
+  community_id: number;
+  label: string;
+  concept_count: number;
+  avg_mastery: number;
+  top_concepts: string[];
+}
+
+export interface ReviewScheduleStats {
+  due_today: number;
+  due_this_week: number;
+  total_cards: number;
+  streak_days: number;
+  cards_by_state: Record<string, number>;
+}
+
+export interface ModeHistoryEntry {
+  mode: string;
+  timestamp: string | null;
+}
+
+export interface ModeInfo {
+  current_mode: string;
+  recent_history: ModeHistoryEntry[];
+}
+
+export interface DashboardStats {
+  learning_velocity: WeeklyVelocity[];
+  knowledge_growth: KnowledgeGrowthPoint[];
+  memory_tiers: MemoryTierStats;
+  communities: CommunityInfo[];
+  review_schedule: ReviewScheduleStats;
+  mode_info: ModeInfo;
+}

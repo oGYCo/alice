@@ -1,4 +1,4 @@
-import type { ContentItem, ContentDetail, SearchResult, SearchHit, Source, PushPreferences } from './types';
+import type { ContentItem, ContentDetail, SearchResult, SearchHit, Source, PushPreferences, DashboardStats } from './types';
 import { useAuthStore } from './store';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -163,6 +163,10 @@ export class AliceApiClient {
 
   async healthCheck(): Promise<{ status: string }> {
     return this.request('/health');
+  }
+
+  async getDashboardStats(userId = 1): Promise<DashboardStats> {
+    return this.request(`/api/v1/dashboard/stats?user_id=${userId}`);
   }
 }
 

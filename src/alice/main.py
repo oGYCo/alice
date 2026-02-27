@@ -19,6 +19,7 @@ _pipeline_module = importlib.import_module("alice.api.v1.pipeline")
 _settings_module = importlib.import_module("alice.api.v1.settings")
 _search_module = importlib.import_module("alice.api.v1.search")
 _feedback_module = importlib.import_module("alice.api.v1.feedback")
+_dashboard_module = importlib.import_module("alice.api.v1.dashboard")
 
 connectors_router = _connectors_module.router
 content_router = _content_module.router
@@ -27,6 +28,7 @@ pipeline_router = _pipeline_module.router
 settings_router = _settings_module.router
 search_router = _search_module.router
 feedback_router = _feedback_module.router
+dashboard_router = _dashboard_module.router
 
 
 @asynccontextmanager
@@ -84,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router, prefix="/api/v1")
     app.include_router(search_router, prefix="/api/v1")
     app.include_router(feedback_router, prefix="/api/v1")
+    app.include_router(dashboard_router, prefix="/api/v1")
 
     @app.get("/health")
     async def health_check():

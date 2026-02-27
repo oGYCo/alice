@@ -4,11 +4,19 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { ContentDetail } from '@/lib/types';
-import { AIAnalysis } from '@/components/content/AIAnalysis';
+import { AISummaryCard, KeyPointsCard } from '@/components/content/AIAnalysis';
 import { ContentSubgraph } from '@/components/content/ContentSubgraph';
 import { OriginalContent } from '@/components/content/OriginalContent';
 import { FeedbackBar } from '@/components/content/FeedbackBar';
 import { Loader2, AlertCircle } from 'lucide-react';
+
+const DOMAIN_TAG_COLORS = [
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700',
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700',
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700',
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700',
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-700',
+];
 
 export default function ContentDetailPage() {
   const params = useParams();
@@ -72,38 +80,70 @@ export default function ContentDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20" data-testid="content-detail-page">
-      <div className="container mx-auto p-4 lg:p-8">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight lg:text-3xl mb-2">{content.title}</h1>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>{content.source}</span>
-            <span>•</span>
-            <span>{new Date(content.created_at).toLocaleDateString()}</span>
+    <div className="min-h-screen bg-background" data-testid="content-detail-page">
+      <div className="max-w-[1040px] mx-auto px-5 lg:px-10 pt-10 pb-24">
+
+        {/* ── Knowledge graph hero (full-width, no card border) ── */}
+        {(content.subgraph?.nodes?.length || content.domains?.length) ? (
+          <div className="mb-8">
+            <ContentSubgraph subgraph={content.subgraph} domains={content.domains} />
+          </div>
+        ) : null}
+
+        {/* ── Article header ── */}
+        <header className="max-w-[740px] mx-auto mb-10">
+          {/* Source breadcrumb */}
+          <p className="text-[11px] font-semibold tracking-[0.12em] uppercase text-muted-foreground/60 mb-4">
+            {content.source}
+          </p>
+          {/* Title */}
+          <h1 className="font-sans text-[30px] lg:text-[38px] font-semibold tracking-tight leading-tight mb-5">
+            {content.title}
+          </h1>
+          {/* Meta row: date · quality score · domain tags */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-muted-foreground">
+            <span>{new Date(content.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             {content.quality_score !== null && (
               <>
-                <span>•</span>
-                <span className="font-medium text-foreground">Score: {content.quality_score}</span>
+                <span className="text-border">·</span>
+                <span className="inline-flex items-center gap-1">
+                  质量分 <strong className="text-foreground tabular-nums">{content.quality_score}</strong>
+                </span>
+              </>
+            )}
+            {content.domains && content.domains.length > 0 && (
+              <>
+                <span className="text-border">·</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {content.domains.map((d, i) => (
+                    <span
+                      key={i}
+                      className={DOMAIN_TAG_COLORS[i % DOMAIN_TAG_COLORS.length]}
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
               </>
             )}
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Panel: AI Analysis & Graph */}
-          <div className="lg:col-span-1 space-y-6">
-            <AIAnalysis item={content} />
-            <ContentSubgraph subgraph={content.subgraph} />
-          </div>
-
-          {/* Middle/Right Panel: Original Content */}
-          <div className="lg:col-span-2">
-            <OriginalContent 
-              content={content.full_content || content.summary || "No content available."} 
-              sourceUrl={content.source_url} 
-            />
-          </div>
+        {/* ── AI analysis: 2 cards side by side, aligned with article column ── */}
+        <div className="max-w-[740px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
+          <AISummaryCard item={content} />
+          <KeyPointsCard item={content} />
         </div>
+
+        {/* ── Article body ── */}
+        <div className="max-w-[740px] mx-auto">
+          <hr className="border-border/40 mb-10" />
+          <OriginalContent
+            content={content.full_content}
+            sourceUrl={content.source_url}
+          />
+        </div>
+
       </div>
 
       <FeedbackBar contentId={content.id} onFeedback={handleFeedback} />

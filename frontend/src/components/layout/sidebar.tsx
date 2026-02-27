@@ -1,8 +1,12 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import { Home, Search, Settings, PlusCircle, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useSidebarStore } from '@/lib/store';
+import { apiClient } from '@/lib/api';
+import type { Source } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -13,6 +17,32 @@ const navItems = [
 
 export function Sidebar() {
   const { isOpen, toggleSidebar } = useSidebarStore();
+  const pathname = usePathname();
+  const [sources, setSources] = useState<Source[]>([]);
+  const [sourcesLoaded, setSourcesLoaded] = useState(false);
+
+  const loadSources = useCallback(async () => {
+    try {
+      const data = await apiClient.getSources();
+      setSources(data);
+    } catch {
+      setSources([]);
+    } finally {
+      setSourcesLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSources();
+  }, [loadSources, pathname]);
+
+  useEffect(() => {
+    const onSourcesUpdated = () => {
+      void loadSources();
+    };
+    window.addEventListener('sources-updated', onSourcesUpdated);
+    return () => window.removeEventListener('sources-updated', onSourcesUpdated);
+  }, [loadSources]);
 
   return (
     <aside
@@ -38,16 +68,24 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-2 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {isOpen && <span>{label}</span>}
-          </Link>
-        ))}
+        {navItems.map(({ href, label, icon: Icon }) => {
+          const isActive = pathname === href || (href !== '/' && pathname.startsWith(href));
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                isActive
+                  ? 'bg-accent text-accent-foreground font-medium'
+                  : 'hover:bg-accent hover:text-accent-foreground'
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {isOpen && <span>{label}</span>}
+            </Link>
+          );
+        })}
       </nav>
 
       {/* Sources section */}
@@ -55,11 +93,36 @@ export function Sidebar() {
         <div className="p-2 border-t border-border">
           <div className="flex items-center justify-between px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             <span>Sources</span>
-            <button className="hover:text-foreground transition-colors" aria-label="Add source">
+            <Link
+              href="/settings"
+              className="hover:text-foreground transition-colors"
+              aria-label="Add source"
+            >
               <PlusCircle className="h-3.5 w-3.5" />
-            </button>
+            </Link>
           </div>
-          <p className="px-3 py-2 text-xs text-muted-foreground">No sources yet</p>
+          {!sourcesLoaded ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">Loading...</p>
+          ) : sources.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">No sources yet</p>
+          ) : (
+            <div className="mt-1 space-y-1">
+              {sources.slice(0, 5).map((source) => (
+                <div
+                  key={source.id}
+                  className="px-3 py-1.5 text-xs rounded text-muted-foreground bg-muted/30 truncate"
+                  title={source.name}
+                >
+                  {source.name}
+                </div>
+              ))}
+              {sources.length > 5 && (
+                <p className="px-3 py-1 text-xs text-muted-foreground">
+                  +{sources.length - 5} more
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </aside>

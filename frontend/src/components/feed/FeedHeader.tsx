@@ -1,4 +1,4 @@
-import { LayoutGrid, List } from 'lucide-react';
+import { LayoutGrid, List, CheckSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -7,6 +7,8 @@ interface FeedHeaderProps {
   onViewModeChange: (mode: 'grid' | 'list') => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
+  selectMode: boolean;
+  onToggleSelectMode: () => void;
 }
 
 export function FeedHeader({
@@ -14,11 +16,13 @@ export function FeedHeader({
   onViewModeChange,
   sortBy,
   onSortChange,
+  selectMode,
+  onToggleSelectMode,
 }: FeedHeaderProps) {
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6" data-testid="feed-header">
       <h1 className="text-3xl font-bold tracking-tight">Feed</h1>
-      
+
       <div className="flex items-center gap-4 w-full sm:w-auto">
         <select
           value={sortBy}
@@ -29,6 +33,17 @@ export function FeedHeader({
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
         </select>
+
+        <Button
+          variant={selectMode ? 'default' : 'outline'}
+          size="sm"
+          onClick={onToggleSelectMode}
+          className="gap-1.5 h-9 shrink-0"
+          title="Select mode"
+        >
+          <CheckSquare className="h-4 w-4" />
+          <span className="hidden sm:inline">Select</span>
+        </Button>
 
         <div className="flex items-center rounded-md border bg-muted/50 p-1">
           <Button

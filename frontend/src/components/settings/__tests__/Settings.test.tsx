@@ -116,7 +116,12 @@ describe('Settings Components', () => {
       epsilon: 0.1,
       max_per_day: 10,
       schedule: {
-        morning: { name: 'morning', start_time: '09:37', end_time: '11:00', is_enabled: true, max_pushes: 5 }
+        morning: { name: 'morning', start_time: '09:37', end_time: '11:00', is_enabled: true, max_pushes: 5 },
+        work: { name: 'work', start_time: '11:00', end_time: '18:00', is_enabled: false, max_pushes: 4 },
+        lunch: { name: 'lunch', start_time: '12:00', end_time: '13:00', is_enabled: false, max_pushes: 1 },
+        evening: { name: 'evening', start_time: '18:00', end_time: '22:00', is_enabled: false, max_pushes: 3 },
+        late_night: { name: 'late_night', start_time: '22:00', end_time: '02:00', is_enabled: false, max_pushes: 1 },
+        weekend: { name: 'weekend', start_time: '10:00', end_time: '22:00', is_enabled: false, max_pushes: 4 },
       }
     });
 

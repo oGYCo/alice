@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ThumbsUp, Clock, CheckCircle, ThumbsDown } from 'lucide-react';
+import { ThumbsUp, Clock, CheckCircle, ThumbsDown, Trash2 } from 'lucide-react';
 import { ContentItem } from '@/lib/types';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,11 @@ import { cn } from '@/lib/utils';
 interface ContentCardProps {
   item: ContentItem;
   onFeedback: (id: number, type: string) => void;
+  onDelete: (id: number) => void;
   viewMode: 'grid' | 'list';
+  isSelectMode: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: number) => void;
 }
 
 const CONTENT_TYPE_LABELS: Record<string, string> = {
@@ -29,7 +33,7 @@ function formatTimeAgo(dateString: string) {
   const date = new Date(dateString);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
   if (seconds < 60) return 'just now';
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
@@ -39,52 +43,85 @@ function formatTimeAgo(dateString: string) {
   return `${days}d ago`;
 }
 
-export function ContentCard({ item, onFeedback, viewMode }: ContentCardProps) {
+export function ContentCard({ item, onFeedback, onDelete, viewMode, isSelectMode, isSelected, onToggleSelect }: ContentCardProps) {
   const isGrid = viewMode === 'grid';
 
-  const typeLabel = item.content_type ? CONTENT_TYPE_LABELS[item.content_type] || item.content_type : 'Unknown';
-  const typeColor = item.content_type ? CONTENT_TYPE_COLORS[item.content_type] || 'bg-gray-100 text-gray-800' : 'bg-gray-100 text-gray-800';
+  const typeLabel = item.content_type ? CONTENT_TYPE_LABELS[item.content_type] || item.content_type : null;
+  const typeColor = item.content_type ? CONTENT_TYPE_COLORS[item.content_type] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300' : '';
 
   return (
-    <Card 
+    <Card
       className={cn(
-        "flex overflow-hidden transition-shadow hover:shadow-md", 
-        isGrid ? "flex-col h-full" : "flex-row items-stretch h-auto"
+        "flex overflow-hidden transition-shadow hover:shadow-md relative",
+        isGrid ? "flex-col h-full" : "flex-row items-stretch h-auto",
+        isSelected && "ring-2 ring-primary"
       )}
       data-testid="content-card"
     >
+      {/* Checkbox overlay for select mode */}
+      {isSelectMode && (
+        <button
+          type="button"
+          aria-label={isSelected ? "Deselect" : "Select"}
+          onClick={() => onToggleSelect(item.id)}
+          className="absolute top-2 left-2 z-10 flex h-5 w-5 items-center justify-center rounded border-2 border-primary bg-background shadow-sm transition-colors"
+        >
+          {isSelected && (
+            <CheckCircle className="h-4 w-4 text-primary fill-primary" />
+          )}
+        </button>
+      )}
       <div className={cn("flex flex-col flex-1", isGrid ? "" : "flex-row")}>
         <div className={cn("flex-1", isGrid ? "" : "flex-row gap-4 p-6")}>
           <CardHeader className={cn("p-4 pb-2 space-y-2", isGrid ? "" : "p-0 pb-0")}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-xs">
-                <span className={cn("px-2 py-0.5 rounded-full font-medium", typeColor)}>
-                  {typeLabel}
-                </span>
-                <span className="text-muted-foreground">{item.source}</span>
+                {typeLabel && (
+                  <span className={cn("px-2 py-0.5 rounded-full font-medium", typeColor, isSelectMode && "ml-6")}>
+                    {typeLabel}
+                  </span>
+                )}
+                <span className={cn("text-muted-foreground", isSelectMode && !typeLabel && "ml-6")}>{item.source}</span>
                 <span className="text-muted-foreground">•</span>
                 <span className="text-muted-foreground">{formatTimeAgo(item.created_at)}</span>
               </div>
-              {item.quality_score !== null && (
-                <div className="flex items-center gap-1 text-xs font-medium" title={`Quality Score: ${item.quality_score}/10`}>
-                  <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-primary" 
-                      style={{ width: `${(item.quality_score / 10) * 100}%` }}
-                    />
+              <div className="flex items-center gap-1">
+                {item.quality_score !== null && (
+                  <div className="flex items-center gap-1 text-xs font-medium" title={`Quality Score: ${item.quality_score}/10`}>
+                    <div className="h-1.5 w-16 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary"
+                        style={{ width: `${(item.quality_score / 10) * 100}%` }}
+                      />
+                    </div>
+                    <span>{item.quality_score}</span>
                   </div>
-                  <span>{item.quality_score}</span>
-                </div>
-              )}
+                )}
+                {!isSelectMode && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    title="Delete"
+                    onClick={(e) => { e.preventDefault(); onDelete(item.id); }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
-            
-            <Link href={`/content/${item.id}`} className="block group">
+
+            <Link
+              href={isSelectMode ? '#' : `/content/${item.id}`}
+              className="block group"
+              onClick={isSelectMode ? (e) => { e.preventDefault(); onToggleSelect(item.id); } : undefined}
+            >
               <h3 className="font-semibold text-lg leading-snug group-hover:text-primary transition-colors line-clamp-2">
                 {item.title}
               </h3>
             </Link>
           </CardHeader>
-          
+
           <CardContent className={cn("p-4 pt-0 text-sm text-muted-foreground", isGrid ? "" : "p-0 mt-2")}>
             <p className={cn(isGrid ? "line-clamp-3" : "line-clamp-2")}>
               {item.summary || "No summary available."}
@@ -93,12 +130,12 @@ export function ContentCard({ item, onFeedback, viewMode }: ContentCardProps) {
         </div>
 
         <CardFooter className={cn(
-          "p-2 bg-muted/20 flex justify-between gap-1 border-t", 
+          "p-2 bg-muted/20 flex justify-between gap-1 border-t",
           isGrid ? "" : "flex-col justify-center border-t-0 border-l w-[140px] shrink-0"
         )}>
-           <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="flex-1 h-8 px-2 text-xs"
             onClick={() => onFeedback(item.id, 'positive')}
             title="高质量"
@@ -106,9 +143,9 @@ export function ContentCard({ item, onFeedback, viewMode }: ContentCardProps) {
             <ThumbsUp className="h-3.5 w-3.5 mr-1.5" />
             <span className={cn(isGrid ? "hidden sm:inline" : "hidden")}>Like</span>
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="flex-1 h-8 px-2 text-xs"
             onClick={() => onFeedback(item.id, 'save_for_later')}
             title="稍后再看"
@@ -116,9 +153,9 @@ export function ContentCard({ item, onFeedback, viewMode }: ContentCardProps) {
             <Clock className="h-3.5 w-3.5 mr-1.5" />
             <span className={cn(isGrid ? "hidden sm:inline" : "hidden")}>Later</span>
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="flex-1 h-8 px-2 text-xs"
             onClick={() => onFeedback(item.id, 'seen')}
             title="已知晓"
@@ -126,9 +163,9 @@ export function ContentCard({ item, onFeedback, viewMode }: ContentCardProps) {
             <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
             <span className={cn(isGrid ? "hidden sm:inline" : "hidden")}>Seen</span>
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="flex-1 h-8 px-2 text-xs text-muted-foreground hover:text-destructive"
             onClick={() => onFeedback(item.id, 'negative')}
             title="无价值"

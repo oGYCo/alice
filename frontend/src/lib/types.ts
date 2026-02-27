@@ -19,7 +19,8 @@ export interface ContentItem {
 export interface ContentSubgraph {
   nodes: Array<{
     id: string;
-    label: string;
+    name: string;    // display name of the concept
+    label: string;   // Neo4j node label (Concept / Method / Tool / Theory)
     mastery: number; // 0-1 (e.g. 0.0=unknown, 0.5=partial, 1.0=mastered)
   }>;
   edges: Array<{
@@ -30,9 +31,9 @@ export interface ContentSubgraph {
 }
 
 export interface ContentDetail extends ContentItem {
-  key_takeaways: string[] | null;
-  push_reason: string | null;
-  reading_suggestion: string | null;
+  key_points: string[] | null;
+  domains: string[] | null;
+  estimated_read_time: number | null;
   full_content: string | null;
   subgraph: ContentSubgraph | null;
 }
@@ -55,11 +56,35 @@ export interface Feedback {
 }
 
 export interface SearchResult {
-  hits: ContentItem[];
+  hits: SearchHit[];
   total: number;
   limit: number;
   offset: number;
   facets: Record<string, Record<string, number>>;
+}
+
+/**
+ * A single Meilisearch search hit.
+ * `id` comes back as a string from the index (we coerce it to number in the API layer).
+ * `_formatted` contains the same fields but with <em>…</em> highlight tags around matches.
+ */
+export interface SearchHit {
+  id: number;           // coerced from string at API layer
+  title: string;
+  summary: string | null;
+  key_points: string[] | null;
+  source: string;
+  source_url: string;
+  content_type: string | null;
+  quality_score: number | null;
+  p_score: number | null;
+  pipeline_status: string;
+  created_at: string;
+  _formatted?: {
+    title?: string;
+    summary?: string;
+    key_points?: string[];
+  };
 }
 
 export type UserMode = 'daily' | 'project' | 'explore' | 'low_energy';

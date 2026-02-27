@@ -35,6 +35,7 @@ export function SourceManager() {
       toast.success("Source added");
       setNewSource({ name: '', url: '', type: 'rss' });
       loadSources();
+      window.dispatchEvent(new Event('sources-updated'));
     } catch {
       toast.error("Failed to add source");
     } finally {
@@ -47,6 +48,7 @@ export function SourceManager() {
       await apiClient.deleteSource(id);
       toast.success("Source deleted");
       setSources(sources.filter(s => s.id !== id));
+      window.dispatchEvent(new Event('sources-updated'));
     } catch {
       toast.error("Failed to delete source");
     }

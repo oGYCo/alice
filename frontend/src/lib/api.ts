@@ -1,6 +1,6 @@
-import type { ContentItem, ContentDetail, Source, SearchResult, PushPreferences } from './types';
+import type { ContentItem, ContentDetail, SearchResult, SearchHit, Source, PushPreferences } from './types';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export class AliceApiClient {
   private baseUrl: string;
@@ -11,16 +11,41 @@ export class AliceApiClient {
     this.apiKey = apiKey;
   }
 
+  private buildUrl(path: string): string {
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    if (!this.baseUrl) {
+      return normalizedPath;
+    }
+    const normalizedBase = this.baseUrl.endsWith('/') ? this.baseUrl.slice(0, -1) : this.baseUrl;
+    return `${normalizedBase}${normalizedPath}`;
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(this.apiKey ? { 'X-API-Key': this.apiKey } : {}),
       ...(options.headers as Record<string, string> ?? {}),
     };
-    const response = await fetch(`${this.baseUrl}${path}`, { ...options, headers });
+    const url = this.buildUrl(path);
+    let response: Response;
+    try {
+      response = await fetch(url, { ...options, headers });
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : 'unknown network error';
+      throw Object.assign(new Error(`Failed to fetch ${url} (${cause})`), { status: 0, cause: error });
+    }
+
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-      throw Object.assign(new Error(error.detail ?? response.statusText), { status: response.status });
+      const error = await response
+        .json()
+        .catch(() => ({ detail: response.statusText })) as { detail?: string; message?: string };
+      throw Object.assign(new Error(error.detail ?? error.message ?? response.statusText), { status: response.status });
+    }
+    if (response.status === 204) {
+      return undefined as T;
     }
     return response.json() as Promise<T>;
   }
@@ -33,11 +58,47 @@ export class AliceApiClient {
     return this.request(`/api/v1/content/${id}`);
   }
 
-  async searchContent(q: string, limit = 20, offset = 0): Promise<SearchResult> {
-    return this.request(`/api/v1/search?q=${encodeURIComponent(q)}&limit=${limit}&offset=${offset}`);
+  async searchContent(
+    q: string,
+    options: { limit?: number; offset?: number; type?: string; min_score?: number } = {},
+  ): Promise<SearchResult> {
+    const { limit = 20, offset = 0, type, min_score } = options;
+    const params = new URLSearchParams({
+      q: q,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (type) params.set('type', type);
+    if (min_score !== undefined) params.set('min_score', String(min_score));
+    const raw = await this.request<{ hits: (Omit<SearchHit, 'id'> & { id: string | number })[]; total: number; limit: number; offset: number; facets: Record<string, Record<string, number>> }>(
+      `/api/v1/search?${params.toString()}`,
+    );
+    return {
+      ...raw,
+      // Meilisearch stores id as string; coerce to number for consistent typing
+      hits: raw.hits.map(h => ({ ...h, id: Number(h.id) })) as SearchHit[],
+    };
+  }
+
+  async getSuggestions(q: string, limit = 5): Promise<string[]> {
+    if (!q.trim()) return [];
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    const raw = await this.request<{ suggestions: string[]; query: string }>(
+      `/api/v1/search/suggest?${params.toString()}`,
+    );
+    return raw.suggestions;
   }
   async getFeed(page = 1, limit = 20, sort = 'relevance'): Promise<ContentItem[]> {
-    return this.request(`/api/v1/content?page=${page}&limit=${limit}&sort=${sort}`);
+    const safePage = Math.max(1, page);
+    const offset = (safePage - 1) * limit;
+    return this.request(`/api/v1/content?limit=${limit}&offset=${offset}&sort=${encodeURIComponent(sort)}`);
+  }
+
+  async triggerFetch(sourceId?: number): Promise<Record<string, unknown>> {
+    return this.request('/api/v1/pipeline/fetch/trigger', {
+      method: 'POST',
+      body: JSON.stringify(sourceId ? { source_id: sourceId } : {}),
+    });
   }
 
   async submitFeedback(contentId: number, type: string): Promise<void> {
@@ -64,6 +125,19 @@ export class AliceApiClient {
   async deleteSource(id: number): Promise<void> {
     return this.request(`/api/v1/sources/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  async deleteContent(id: number): Promise<void> {
+    return this.request(`/api/v1/content/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async deleteContentBatch(ids: number[]): Promise<{ deleted: number }> {
+    return this.request('/api/v1/content', {
+      method: 'DELETE',
+      body: JSON.stringify({ ids }),
     });
   }
 

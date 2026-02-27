@@ -4,11 +4,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import FeedPage from '@/app/feed/page';
+import type { ContentItem } from '@/lib/types';
 
 // Mock the API client
 vi.mock('@/lib/api', () => ({
   apiClient: {
     getFeed: vi.fn(),
+    getSources: vi.fn(),
+    triggerFetch: vi.fn(),
     submitFeedback: vi.fn(),
   },
 }));
@@ -28,28 +31,38 @@ vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 
 import { apiClient } from '@/lib/api';
 
-const MOCK_ITEMS = [
+const MOCK_ITEMS: ContentItem[] = [
   {
     id: 1,
     title: 'Introduction to Transformers',
+    url: 'https://example.com/transformers',
     summary: 'A guide to transformer architecture.',
+    source_url: 'https://example.com/transformers',
     content_type: 'deep_knowledge',
-    source: 'https://example.com/transformers',
+    source: 'rss',
+    pipeline_status: 'indexed',
+    created_at: '2025-01-01T00:00:00Z',
     published_at: '2025-01-01T00:00:00Z',
+    pushed_at: null,
+    metadata_: null,
     p_score: 0.85,
     quality_score: 8.0,
-    estimated_read_time: 10,
   },
   {
     id: 2,
     title: 'Attention Is All You Need',
+    url: 'https://arxiv.org/abs/1706.03762',
     summary: 'The original transformer paper.',
+    source_url: 'https://arxiv.org/abs/1706.03762',
     content_type: 'thought_provoking',
-    source: 'https://arxiv.org/abs/1706.03762',
+    source: 'arxiv',
+    pipeline_status: 'indexed',
+    created_at: '2024-12-01T00:00:00Z',
     published_at: '2024-12-01T00:00:00Z',
+    pushed_at: null,
+    metadata_: null,
     p_score: 0.92,
     quality_score: 9.5,
-    estimated_read_time: 20,
   },
 ];
 
@@ -57,6 +70,8 @@ describe('FeedPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(apiClient.getFeed).mockResolvedValue(MOCK_ITEMS);
+    vi.mocked(apiClient.getSources).mockResolvedValue([]);
+    vi.mocked(apiClient.triggerFetch).mockResolvedValue({ status: 'ok' });
     vi.mocked(apiClient.submitFeedback).mockResolvedValue(undefined);
   });
 
@@ -131,6 +146,26 @@ describe('FeedPage', () => {
 
     // Should not show any content cards
     expect(screen.queryByText('Introduction to Transformers')).not.toBeInTheDocument();
+  });
+
+  it('shows fetch action when sources exist but feed is empty', async () => {
+    vi.mocked(apiClient.getFeed).mockResolvedValue([]);
+    vi.mocked(apiClient.getSources).mockResolvedValue([
+      {
+        id: 1,
+        name: 'HN RSS',
+        url: 'https://hnrss.org/frontpage',
+        type: 'rss',
+        is_active: true,
+        created_at: '2025-01-01T00:00:00Z',
+      },
+    ]);
+
+    render(<FeedPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('fetch-now')).toBeInTheDocument();
+    });
   });
 
   it('handles API error gracefully without crashing', async () => {

@@ -168,9 +168,10 @@ async def test_update_mastery_clamps_low(ukg: UserKnowledgeGraph, mock_client: A
 async def test_update_mastery_calls_set_cypher(
     ukg: UserKnowledgeGraph, mock_client: AsyncMock
 ) -> None:
-    """update_mastery runs SET r.mastery Cypher."""
+    """update_mastery runs MERGE + SET r.mastery Cypher (creates KNOWS if missing)."""
     await ukg.update_mastery(user_id=1, concept="attention", new_mastery=0.9)
     cypher = mock_client.execute_query.call_args.args[0]
+    assert "MERGE" in cypher, "Should use MERGE to create KNOWS if missing"
     assert "SET" in cypher
     assert "mastery" in cypher
     params = mock_client.execute_query.call_args.args[1]

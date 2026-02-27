@@ -143,10 +143,17 @@ class UserKnowledgeGraph:
         ]
 
     async def update_mastery(self, user_id: int, concept: str, new_mastery: float) -> None:
-        """Update mastery level for an existing KNOWS relationship."""
+        """Update (or create) mastery level for a KNOWS relationship.
+
+        Uses MERGE so that the relationship is created when the user
+        encounters a concept for the first time via feedback.
+        """
         new_mastery = _clamp(new_mastery)
         cypher = (
-            "MATCH (u:User {id: $user_id})-[r:KNOWS]->(c:Concept {name: $concept}) "
+            "MERGE (u:User {id: $user_id}) "
+            "ON CREATE SET u.created_at = datetime() "
+            "MERGE (c:Concept {name: $concept}) "
+            "MERGE (u)-[r:KNOWS]->(c) "
             "SET r.mastery = $mastery, r.last_reviewed = datetime()"
         )
         await self._client.execute_query(

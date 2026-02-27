@@ -1,9 +1,27 @@
 """Celery application factory and configuration."""
 
+import logging
+
 from celery import Celery
+from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import worker_process_init
 
 from alice.config import settings
+
+
+@celery_setup_logging.connect
+def configure_celery_logging(**kwargs: object) -> None:  # noqa: ARG001
+    """Bridge structlog into Celery's logging so structlog levels are respected.
+
+    Without this, Celery captures all structlog output (which goes through
+    stdlib logging) and re-emits it at WARNING level.
+    """
+    from alice.logging import setup_logging  # noqa: PLC0415
+
+    setup_logging()
+    # Celery's own loggers should respect the configured level.
+    logging.getLogger("celery").setLevel(settings.LOG_LEVEL)
+    logging.getLogger("celery.worker").setLevel(settings.LOG_LEVEL)
 
 
 @worker_process_init.connect

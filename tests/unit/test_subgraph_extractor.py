@@ -72,14 +72,8 @@ async def test_extract_creates_discusses_relationships(
 ) -> None:
     """extract() creates DISCUSSES links from content to each concept."""
     await extractor.extract(content_id=42, title="Test", summary="Summary", key_points=["Point A"])
-    discusses_calls = [
-        call
-        for call in mock_repo.create_relationship.call_args_list
-        if call.args[4] == RelType.DISCUSSES
-        or (len(call.args) > 4 and call.args[4] == RelType.DISCUSSES)
-    ]
-    # One DISCUSSES per node (2 nodes) + edge calls
-    assert len(discusses_calls) == 2
+    # Implementation uses link_content_to_concept (not create_relationship) for DISCUSSES
+    assert mock_repo.link_content_to_concept.call_count == 2
 
 
 async def test_extract_creates_edge_relationships(
@@ -87,8 +81,8 @@ async def test_extract_creates_edge_relationships(
 ) -> None:
     """extract() creates PREREQUISITE_OF edge from concept_0 → concept_1."""
     await extractor.extract(content_id=42, title="Test", summary="Summary", key_points=[])
-    # 2 DISCUSSES calls + 1 PREREQUISITE_OF edge call = 3 total
-    assert mock_repo.create_relationship.call_count == 3
+    # Only concept-to-concept edges use create_relationship (DISCUSSES uses link_content_to_concept)
+    assert mock_repo.create_relationship.call_count == 1
 
 
 async def test_max_10_nodes_enforced(extractor: SubgraphExtractor, mock_llm: AsyncMock) -> None:

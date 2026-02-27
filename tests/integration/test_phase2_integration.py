@@ -19,15 +19,16 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from alice.graph.client import GraphClient
 from alice.graph.extractor import ContentSubgraph, ContentSubgraphNode
 from alice.graph.repository import GraphRepository
 from alice.graph.user_kg import UserKnowledgeGraph
+from alice.llm.factory import create_llm_client
 from alice.llm.protocol import LLMClient
 from alice.models.base import Base
 from alice.models.content import Content, PipelineStatus
@@ -35,7 +36,7 @@ from alice.models.user import User
 from alice.services.kg_updater import KGUpdater
 from alice.services.matching import MatchingService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
 # Module-level skip if required env vars are not set
@@ -45,6 +46,7 @@ TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
 NEO4J_TEST_URI = os.environ.get("NEO4J_TEST_URI", "")
 NEO4J_TEST_USER = os.environ.get("NEO4J_TEST_USER", "neo4j")
 NEO4J_TEST_PASS = os.environ.get("NEO4J_TEST_PASS", "password")
+PHASE2_LLM_PROVIDER = os.environ.get("PHASE2_LLM_PROVIDER", "ollama")
 
 _MISSING = []
 if not TEST_DATABASE_URL:
@@ -63,7 +65,7 @@ if _MISSING:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def engine():
     """Create async engine connected to test DB."""
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
@@ -75,7 +77,7 @@ async def engine():
     await eng.dispose()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(loop_scope="module")
 async def session(engine):
     """Provide a transactional session, rolled back after each test."""
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -90,7 +92,7 @@ async def session(engine):
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def graph_client():
     """Open a GraphClient connected to the test Neo4j instance."""
     client = GraphClient(
@@ -111,6 +113,12 @@ def graph_repo(graph_client: GraphClient) -> GraphRepository:
 @pytest.fixture
 def user_kg(graph_client: GraphClient) -> UserKnowledgeGraph:
     return UserKnowledgeGraph(graph_client)
+
+
+@pytest.fixture(scope="module")
+def phase2_llm_client() -> LLMClient:
+    """Build a real LLM client implementation for KGUpdater integration flow."""
+    return create_llm_client(PHASE2_LLM_PROVIDER)
 
 
 # ---------------------------------------------------------------------------
@@ -200,13 +208,7 @@ async def test_subgraph_stored_in_neo4j(graph_repo: GraphRepository, graph_clien
     # Insert concept node
     await graph_repo.upsert_concept(concept_name)
     # Create DISCUSSES relationship
-    await graph_repo.create_relationship(
-        from_name=str(content_id),
-        from_label="Content",
-        to_name=concept_name,
-        to_label="Concept",
-        rel_type="DISCUSSES",
-    )
+    await graph_repo.link_content_to_concept(content_id, concept_name, "Concept")
 
     # Verify
     rows = await graph_client.execute_query(
@@ -224,7 +226,10 @@ async def test_subgraph_stored_in_neo4j(graph_repo: GraphRepository, graph_clien
 
 
 async def test_positive_feedback_updates_mastery_in_neo4j(
-    graph_client: GraphClient, graph_repo: GraphRepository, user_kg: UserKnowledgeGraph
+    graph_client: GraphClient,
+    graph_repo: GraphRepository,
+    user_kg: UserKnowledgeGraph,
+    phase2_llm_client: LLMClient,
 ):
     """Positive feedback raises mastery of content concepts in Neo4j."""
     user_id = 9902
@@ -238,18 +243,13 @@ async def test_positive_feedback_updates_mastery_in_neo4j(
     # Setup: content discusses the concept
     await graph_client.execute_query("MERGE (c:Content {id: $id})", {"id": content_id})
     await graph_repo.upsert_concept(concept_name)
-    await graph_repo.create_relationship(
-        from_name=str(content_id),
-        from_label="Content",
-        to_name=concept_name,
-        to_label="Concept",
-        rel_type="DISCUSSES",
+    await graph_client.execute_query(
+        "MATCH (c:Concept {name: $name}) SET c.mastery = $mastery",
+        {"name": concept_name, "mastery": 0.45},
     )
+    await graph_repo.link_content_to_concept(content_id, concept_name, "Concept")
 
-    mock_llm = MagicMock(spec=LLMClient)
-    mock_llm.complete = AsyncMock(return_value="mismatch: too advanced")
-
-    updater = KGUpdater(graph_client=graph_client, llm_client=mock_llm)
+    updater = KGUpdater(graph_client=graph_client, llm_client=phase2_llm_client)
     result = await updater.update_on_feedback(user_id, content_id, "positive")
 
     assert result.success is True
@@ -263,7 +263,10 @@ async def test_positive_feedback_updates_mastery_in_neo4j(
 
 
 async def test_negative_feedback_reduces_mastery_in_neo4j(
-    graph_client: GraphClient, graph_repo: GraphRepository, user_kg: UserKnowledgeGraph
+    graph_client: GraphClient,
+    graph_repo: GraphRepository,
+    user_kg: UserKnowledgeGraph,
+    phase2_llm_client: LLMClient,
 ):
     """Negative feedback reduces mastery of content concepts in Neo4j."""
     user_id = 9903
@@ -272,20 +275,19 @@ async def test_negative_feedback_reduces_mastery_in_neo4j(
 
     await user_kg.ensure_user_node(user_id)
     await user_kg.add_known_concept(user_id, concept_name, mastery=0.6)
-    await graph_client.execute_query("MERGE (c:Content {id: $id})", {"id": content_id})
-    await graph_repo.upsert_concept(concept_name)
-    await graph_repo.create_relationship(
-        from_name=str(content_id),
-        from_label="Content",
-        to_name=concept_name,
-        to_label="Concept",
-        rel_type="DISCUSSES",
+    await graph_client.execute_query(
+        "MERGE (c:Content {id: $id}) "
+        "SET c.summary = $summary",
+        {"id": content_id, "summary": "A deep and advanced GPT-4 systems paper."},
     )
+    await graph_repo.upsert_concept(concept_name)
+    await graph_client.execute_query(
+        "MATCH (c:Concept {name: $name}) SET c.mastery = $mastery",
+        {"name": concept_name, "mastery": 0.6},
+    )
+    await graph_repo.link_content_to_concept(content_id, concept_name, "Concept")
 
-    mock_llm = MagicMock(spec=LLMClient)
-    mock_llm.complete = AsyncMock(return_value="too advanced")
-
-    updater = KGUpdater(graph_client=graph_client, llm_client=mock_llm)
+    updater = KGUpdater(graph_client=graph_client, llm_client=phase2_llm_client)
     result = await updater.update_on_feedback(user_id, content_id, "negative")
 
     assert result.success is True
@@ -295,7 +297,9 @@ async def test_negative_feedback_reduces_mastery_in_neo4j(
 
 
 async def test_save_for_later_no_mastery_change(
-    graph_client: GraphClient, user_kg: UserKnowledgeGraph
+    graph_client: GraphClient,
+    user_kg: UserKnowledgeGraph,
+    phase2_llm_client: LLMClient,
 ):
     """Save-for-later feedback produces no changes in Neo4j mastery."""
     user_id = 9904
@@ -307,8 +311,7 @@ async def test_save_for_later_no_mastery_change(
     km_before = await user_kg.get_knowledge_map(user_id)
     mastery_before = {k.concept: k.mastery for k in km_before}.get(concept_name)
 
-    mock_llm = MagicMock(spec=LLMClient)
-    updater = KGUpdater(graph_client=graph_client, llm_client=mock_llm)
+    updater = KGUpdater(graph_client=graph_client, llm_client=phase2_llm_client)
     result = await updater.update_on_feedback(user_id, 9993, "save_for_later")
 
     assert result.success is True
@@ -397,21 +400,19 @@ async def test_match_score_high_for_known_concepts(
     subgraph = ContentSubgraph(
         nodes=[
             ContentSubgraphNode(
-                id="c0",
                 name="AttentionT38match",
                 type="concept",
-                description="Attention mechanism",
-                mastery=0.7,
             )
         ],
         edges=[],
+        difficulty=0.7,
+        entry_concepts=["AttentionT38match"],
     )
 
     svc = MatchingService(client=graph_client)
-    high_result = await svc.compute_match(
+    high_result = await svc.compute_match_score(
         user_id=user_id,
-        content_subgraph=subgraph,
-        content_difficulty=0.7,
+        subgraph=subgraph,
     )
     assert high_result.match_score > 0.3
 
@@ -428,21 +429,19 @@ async def test_match_score_lower_for_unknown_concepts(
     subgraph = ContentSubgraph(
         nodes=[
             ContentSubgraphNode(
-                id="qc0",
                 name="QuantumComputingT38",
                 type="concept",
-                description="Quantum computing basics",
-                mastery=0.9,
             )
         ],
         edges=[],
+        difficulty=0.9,
+        entry_concepts=["QuantumComputingT38"],
     )
 
     svc = MatchingService(client=graph_client)
-    low_result = await svc.compute_match(
+    low_result = await svc.compute_match_score(
         user_id=user_id,
-        content_subgraph=subgraph,
-        content_difficulty=0.9,
+        subgraph=subgraph,
     )
     assert low_result.match_score < 0.5
 
@@ -459,34 +458,34 @@ async def test_high_match_ranks_above_low_match(
     high_subgraph = ContentSubgraph(
         nodes=[
             ContentSubgraphNode(
-                id="n0", name="NLPConceptT38", type="concept", description="NLP", mastery=0.8
+                name="NLPConceptT38",
+                type="concept",
             )
         ],
         edges=[],
+        difficulty=0.7,
+        entry_concepts=["NLPConceptT38"],
     )
     low_subgraph = ContentSubgraph(
         nodes=[
             ContentSubgraphNode(
-                id="n1",
                 name="UnknownTopicT38XYZ",
                 type="concept",
-                description="Obscure topic",
-                mastery=0.9,
             )
         ],
         edges=[],
+        difficulty=0.9,
+        entry_concepts=["UnknownTopicT38XYZ"],
     )
 
     svc = MatchingService(client=graph_client)
-    high_result = await svc.compute_match(
+    high_result = await svc.compute_match_score(
         user_id=user_id,
-        content_subgraph=high_subgraph,
-        content_difficulty=0.7,
+        subgraph=high_subgraph,
     )
-    low_result = await svc.compute_match(
+    low_result = await svc.compute_match_score(
         user_id=user_id,
-        content_subgraph=low_subgraph,
-        content_difficulty=0.9,
+        subgraph=low_subgraph,
     )
 
     assert high_result.match_score > low_result.match_score

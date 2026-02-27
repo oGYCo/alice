@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from alice.schemas.content import (
+    ContentDetailSchema,
     ContentResponseSchema,
     ContentUnderstandingSchema,
     RawContentSchema,
@@ -195,6 +196,40 @@ class TestContentResponseSchema:
         )
         assert response.id == 1
         assert response.quality_score == 7.5
+
+
+class TestContentDetailSchema:
+    """Tests for ContentDetailSchema computed fields."""
+
+    def test_full_content_prefers_extracted_text(self):
+        """full_content uses extracted_text when available."""
+        from datetime import datetime
+
+        detail = ContentDetailSchema(
+            id=1,
+            source="rss",
+            source_url="https://example.com",
+            pipeline_status="indexed",
+            created_at=datetime.now(),
+            extracted_text="extracted",
+            raw_text="raw",
+        )
+        assert detail.full_content == "extracted"
+
+    def test_full_content_falls_back_to_raw_text(self):
+        """full_content falls back to raw_text when extracted_text is missing."""
+        from datetime import datetime
+
+        detail = ContentDetailSchema(
+            id=2,
+            source="rss",
+            source_url="https://example.com/2",
+            pipeline_status="indexed",
+            created_at=datetime.now(),
+            extracted_text=None,
+            raw_text="raw fallback",
+        )
+        assert detail.full_content == "raw fallback"
 
 
 class TestPipelineTaskSchema:

@@ -1,6 +1,6 @@
 """Telegram flow integration tests for Alice AI Secretary.
 
-Tests Telegram bot interactions using mocked bot objects and a real PostgreSQL DB:
+Tests Telegram bot interactions using callback objects and a real PostgreSQL DB:
 - Webhook callback data parsing
 - Feedback handler stores feedback to DB
 - Feedback callback → KGUpdater → acknowledgment message
@@ -17,18 +17,14 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
-from aiogram import Bot
-from aiogram.types import CallbackQuery, Chat, Message
-from aiogram.types import User as TelegramUser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from alice.bot.handlers.feedback import (
-    handle_feedback_callback,
+    handle_feedback_callback_with_session_factory,
     parse_callback_data,
 )
 from alice.models.base import Base
@@ -124,35 +120,38 @@ async def session(engine, db_seed):
         await trans.rollback()
 
 
-def _make_mock_bot() -> MagicMock:
-    """Create a mock aiogram Bot object."""
-    bot = MagicMock(spec=Bot)
-    bot.send_message = AsyncMock(return_value=None)
-    return bot
+class _FromUserStub:
+    def __init__(self, user_id: int) -> None:
+        self.id = user_id
+
+
+class _CallbackQueryStub:
+    def __init__(self, data: str, user_id: int) -> None:
+        self.data = data
+        self.from_user = _FromUserStub(user_id)
+        self.answer_calls: list[dict[str, str]] = []
+
+    async def answer(self, *, text: str) -> None:
+        self.answer_calls.append({"text": text})
+
+
+class _BotStub:
+    async def send_message(self, *_: object, **__: object) -> None:
+        return None
+
+
+def _make_mock_bot() -> _BotStub:
+    return _BotStub()
 
 
 def _make_callback_query(
     data: str,
     chat_id: int = 100001,
     user_id: int = 1,
-) -> MagicMock:
-    """Create a minimal mock CallbackQuery."""
-    query = MagicMock(spec=CallbackQuery)
-    query.data = data
-    query.answer = AsyncMock(return_value=None)
-
-    mock_message = MagicMock(spec=Message)
-    mock_chat = MagicMock(spec=Chat)
-    mock_chat.id = chat_id
-    mock_message.chat = mock_chat
-    mock_message.answer = AsyncMock(return_value=None)
-    query.message = mock_message
-
-    mock_from_user = MagicMock(spec=TelegramUser)
-    mock_from_user.id = user_id
-    query.from_user = mock_from_user
-
-    return query
+) -> _CallbackQueryStub:
+    """Create a minimal callback query object for handler integration tests."""
+    del chat_id
+    return _CallbackQueryStub(data=data, user_id=user_id)
 
 
 def _make_content_row(url: str) -> Content:
@@ -245,8 +244,11 @@ async def test_feedback_callback_stores_to_db(engine, db_seed):
         chat_id=100001,
     )
 
-    with patch("alice.bot.handlers.feedback.AsyncSessionLocal", factory):
-        await handle_feedback_callback(query, mock_bot)
+    await handle_feedback_callback_with_session_factory(
+        query,
+        mock_bot,
+        session_factory=factory,
+    )
 
     # Verify feedback was stored (handler commits its own session)
     async with factory() as verify_sess:
@@ -257,7 +259,7 @@ async def test_feedback_callback_stores_to_db(engine, db_seed):
 
     assert feedback is not None
     assert feedback.content_id == content_id
-    query.answer.assert_called_once()
+    assert len(query.answer_calls) == 1
 
 
 async def test_feedback_callback_sends_confirmation_message(engine, db_seed):
@@ -276,11 +278,14 @@ async def test_feedback_callback_sends_confirmation_message(engine, db_seed):
         chat_id=100002,
     )
 
-    with patch("alice.bot.handlers.feedback.AsyncSessionLocal", factory):
-        await handle_feedback_callback(query, mock_bot)
+    await handle_feedback_callback_with_session_factory(
+        query,
+        mock_bot,
+        session_factory=factory,
+    )
 
     # The handler should have called query.answer() to acknowledge the callback
-    query.answer.assert_called_once()
+    assert len(query.answer_calls) == 1
 
 
 async def test_not_valuable_feedback_stores_correct_type(engine, db_seed):
@@ -299,10 +304,13 @@ async def test_not_valuable_feedback_stores_correct_type(engine, db_seed):
         chat_id=100003,
     )
 
-    with patch("alice.bot.handlers.feedback.AsyncSessionLocal", factory):
-        await handle_feedback_callback(query, mock_bot)
+    await handle_feedback_callback_with_session_factory(
+        query,
+        mock_bot,
+        session_factory=factory,
+    )
 
-    query.answer.assert_called_once()
+    assert len(query.answer_calls) == 1
 
 
 async def test_already_known_feedback_acknowledged(engine, db_seed):
@@ -321,10 +329,13 @@ async def test_already_known_feedback_acknowledged(engine, db_seed):
         chat_id=100004,
     )
 
-    with patch("alice.bot.handlers.feedback.AsyncSessionLocal", factory):
-        await handle_feedback_callback(query, mock_bot)
+    await handle_feedback_callback_with_session_factory(
+        query,
+        mock_bot,
+        session_factory=factory,
+    )
 
-    query.answer.assert_called_once()
+    assert len(query.answer_calls) == 1
 
 
 async def test_invalid_callback_data_does_not_crash(engine, db_seed):
@@ -333,9 +344,12 @@ async def test_invalid_callback_data_does_not_crash(engine, db_seed):
     mock_bot = _make_mock_bot()
     query = _make_callback_query(data="invalid_garbage_data", chat_id=100005)
 
-    with patch("alice.bot.handlers.feedback.AsyncSessionLocal", factory):
-        # Should not raise — the handler catches ValueError internally
-        await handle_feedback_callback(query, mock_bot)
+    # Should not raise — the handler catches ValueError internally
+    await handle_feedback_callback_with_session_factory(
+        query,
+        mock_bot,
+        session_factory=factory,
+    )
 
     # Handler should still call answer() with an error message
-    query.answer.assert_called_once()
+    assert len(query.answer_calls) == 1

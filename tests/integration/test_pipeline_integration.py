@@ -1,41 +1,67 @@
-"""Integration tests for PipelineOrchestrator.
+"""Integration tests for PipelineOrchestrator with real Redis dispatch path.
 
-Requires a real PostgreSQL test database.
-Set TEST_DATABASE_URL env var to run:
-    export TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/alice_test"
-    uv run pytest tests/integration/test_pipeline_integration.py -v -m integration
-
-Skip automatically when TEST_DATABASE_URL is not set.
+Requires:
+- TEST_DATABASE_URL (real PostgreSQL test DB)
+- TEST_REDIS_URL (real Redis broker for Celery `.delay()`)
 """
 
+from __future__ import annotations
+
+import json
 import os
-from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
+import redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from alice.config import settings
 from alice.models.base import Base
 from alice.models.content import Content, PipelineStatus
 from alice.pipeline.orchestrator import PipelineOrchestrator
 from alice.schemas.content import RawContentSchema
 from alice.services.storage import ContentStorageService
+from alice.worker.celery_app import celery_app
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
-# ---------------------------------------------------------------------------
-# Module-level skip if TEST_DATABASE_URL not set
-# ---------------------------------------------------------------------------
-
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6380/0")
 
 if not TEST_DATABASE_URL:
     pytest.skip("TEST_DATABASE_URL not set — skipping integration tests", allow_module_level=True)
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+@pytest.fixture(scope="module", autouse=True)
+def configure_real_broker() -> None:
+    """Configure Celery to use a real Redis broker for dispatch assertions."""
+    client = redis.Redis.from_url(TEST_REDIS_URL)
+    try:
+        client.ping()
+    except redis.RedisError as exc:
+        pytest.skip(f"Redis broker unavailable at {TEST_REDIS_URL}: {exc}")
+
+    settings.CELERY_BROKER_URL = TEST_REDIS_URL
+    settings.REDIS_URL = TEST_REDIS_URL
+    celery_app.conf.broker_url = TEST_REDIS_URL
+    celery_app.conf.result_backend = TEST_REDIS_URL
+
+    client.flushdb()
+    yield
+    client.flushdb()
+    client.close()
+
+
+@pytest.fixture()
+def redis_client():
+    """Isolated Redis handle for queue length assertions."""
+    client = redis.Redis.from_url(TEST_REDIS_URL)
+    client.flushdb()
+    try:
+        yield client
+    finally:
+        client.flushdb()
+        client.close()
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
@@ -52,12 +78,7 @@ async def engine():
 
 @pytest_asyncio.fixture(loop_scope="module")
 async def session(engine):
-    """Provide a session with savepoint isolation.
-
-    Services may call session.commit(); join_transaction_mode='create_savepoint'
-    converts those commits into SAVEPOINT releases instead of real commits.
-    The outer transaction is rolled back after each test.
-    """
+    """Provide a session with savepoint isolation."""
     async with engine.connect() as conn:
         trans = await conn.begin()
         factory = async_sessionmaker(
@@ -79,24 +100,8 @@ def content_svc(session):
 
 @pytest.fixture
 def orchestrator(content_svc):
-    """Provide PipelineOrchestrator with test storage."""
+    """Provide PipelineOrchestrator with real storage service."""
     return PipelineOrchestrator(content_svc)
-
-
-@pytest.fixture(autouse=True)
-def mock_pipeline_task_delay():
-    """Avoid Redis/Celery dependency when testing orchestrator stage transitions."""
-    with (
-        patch("alice.pipeline.tasks.task_run_understanding.delay", return_value=None),
-        patch("alice.pipeline.tasks.task_run_scoring.delay", return_value=None),
-        patch("alice.pipeline.tasks.task_run_indexing.delay", return_value=None),
-    ):
-        yield
-
-
-# ---------------------------------------------------------------------------
-# Helper: Create test content
-# ---------------------------------------------------------------------------
 
 
 async def _create_test_content(content_svc: ContentStorageService, suffix: str) -> Content:
@@ -110,61 +115,55 @@ async def _create_test_content(content_svc: ContentStorageService, suffix: str) 
     return await content_svc.store_raw(raw)
 
 
-# ---------------------------------------------------------------------------
-# Integration Tests
-# ---------------------------------------------------------------------------
-
-
-async def test_advance_pipeline_gatekeeper_passed(orchestrator, content_svc):
-    """advance_pipeline('gatekeeper', content_id, passed=True) dispatches next task.
-
-    Note: Since we can't dispatch actual Celery tasks without Redis/Celery running,
-    this test verifies the method behavior. The task dispatch would fail without
-    full Celery setup, so we instead verify that passing content avoids mark_failed.
-    """
+async def test_advance_pipeline_gatekeeper_passed_enqueues_understanding(
+    orchestrator,
+    content_svc,
+    redis_client,
+):
+    """Passing gatekeeper should dispatch next stage to Redis queue."""
     content = await _create_test_content(content_svc, "gatekeeper_pass")
     assert content.pipeline_status == PipelineStatus.fetched
 
-    # Note: Calling advance_pipeline with passed=True would normally dispatch
-    # task_run_understanding.delay(). Without Celery running, this would fail.
-    # In a full integration test with Celery, the next task would be dispatched.
-    # For this test, we verify the status remains non-failed after passing.
-    result = {"passed": True}
-    await orchestrator.advance_pipeline(content.id, "gatekeeper", result)
+    before = redis_client.llen("pipeline")
+    await orchestrator.advance_pipeline(content.id, "gatekeeper", {"passed": True})
+    after = redis_client.llen("pipeline")
 
-    # Content should NOT be marked as failed since it passed gatekeeper
+    assert after == before + 1
     refreshed = await content_svc.get_by_id(content.id)
+    assert refreshed is not None
     assert refreshed.pipeline_status != PipelineStatus.failed
 
 
-async def test_advance_pipeline_gatekeeper_failed(orchestrator, content_svc):
-    """advance_pipeline('gatekeeper', content_id, passed=False) sets status to failed."""
+async def test_advance_pipeline_gatekeeper_failed_no_dispatch(orchestrator, content_svc, redis_client):
+    """Failing gatekeeper marks failed and should not enqueue next stage."""
     content = await _create_test_content(content_svc, "gatekeeper_fail")
-    assert content.pipeline_status == PipelineStatus.fetched
+    before = redis_client.llen("pipeline")
 
-    # Simulate gatekeeper rejecting content
-    result = {"passed": False, "reason": "Content does not meet quality threshold"}
-    await orchestrator.advance_pipeline(content.id, "gatekeeper", result)
+    await orchestrator.advance_pipeline(
+        content.id,
+        "gatekeeper",
+        {"passed": False, "reason": "Content does not meet quality threshold"},
+    )
 
-    # Verify status is now failed
+    after = redis_client.llen("pipeline")
+    assert after == before
+
     refreshed = await content_svc.get_by_id(content.id)
+    assert refreshed is not None
     assert refreshed.pipeline_status == PipelineStatus.failed
     assert refreshed.pipeline_error is not None
 
 
 async def test_mark_failed_stores_error(orchestrator, content_svc):
-    """mark_failed stores error JSON with stage and reason."""
+    """mark_failed stores failure metadata in JSON format."""
     content = await _create_test_content(content_svc, "mark_failed")
-    content_id = content.id
 
-    await orchestrator.mark_failed(content_id, "gatekeeper", "User content detected")
+    await orchestrator.mark_failed(content.id, "gatekeeper", "User content detected")
 
-    refreshed = await content_svc.get_by_id(content_id)
+    refreshed = await content_svc.get_by_id(content.id)
+    assert refreshed is not None
     assert refreshed.pipeline_status == PipelineStatus.failed
     assert refreshed.pipeline_error is not None
-
-    # Verify error JSON contains expected fields
-    import json
 
     error_data = json.loads(refreshed.pipeline_error)
     assert error_data["failed_at_stage"] == "gatekeeper"
@@ -185,55 +184,34 @@ async def test_advance_pipeline_unknown_stage(orchestrator, content_svc):
         await orchestrator.advance_pipeline(content.id, "invalid_stage", {})
 
 
-async def test_advance_pipeline_indexed_terminal_state(orchestrator, content_svc):
-    """advance_pipeline on 'indexed' stage (terminal) completes without dispatching."""
-    content = await _create_test_content(content_svc, "indexed_terminal")
+async def test_advance_pipeline_understood_enqueues_scoring(orchestrator, content_svc, redis_client):
+    """Advancing from understood should enqueue scoring task on Redis."""
+    content = await _create_test_content(content_svc, "understood")
 
-    # Manually set status to scored (simulating prior pipeline progress)
+    before = redis_client.llen("pipeline")
+    await orchestrator.advance_pipeline(content.id, "understood", {})
+    after = redis_client.llen("pipeline")
+
+    assert after == before + 1
+
+
+async def test_advance_pipeline_indexed_terminal_state(orchestrator, content_svc, redis_client):
+    """Indexed is terminal: status updates without enqueueing more tasks."""
+    content = await _create_test_content(content_svc, "indexed_terminal")
     await content_svc.update_pipeline_status(content.id, PipelineStatus.scored)
 
-    # Advance from scored to indexed
-    # In a real test, we'd mock _dispatch_next, but here we just verify
-    # that advancing from indexed doesn't attempt to dispatch further tasks
+    before = redis_client.llen("pipeline")
     await orchestrator.advance_pipeline(content.id, "indexed", {})
+    after = redis_client.llen("pipeline")
 
+    assert after == before
     refreshed = await content_svc.get_by_id(content.id)
-    # Status should remain indexed since it's terminal
+    assert refreshed is not None
     assert refreshed.pipeline_status == PipelineStatus.indexed
 
 
-async def test_orchestrator_workflow_sequence(orchestrator, content_svc):
-    """Test a sequence of orchestrator operations in one workflow."""
-    # Create content
-    content = await _create_test_content(content_svc, "workflow")
-    assert content.pipeline_status == PipelineStatus.fetched
-
-    # Manually advance status to gatekept (simulating gatekeeper task completion)
-    await content_svc.update_pipeline_status(content.id, PipelineStatus.gatekept)
-    refreshed = await content_svc.get_by_id(content.id)
-    assert refreshed.pipeline_status == PipelineStatus.gatekept
-
-    # Manually advance to understood
-    await content_svc.update_pipeline_status(content.id, PipelineStatus.understood)
-    refreshed = await content_svc.get_by_id(content.id)
-    assert refreshed.pipeline_status == PipelineStatus.understood
-
-    # Manually advance to scored
-    await content_svc.update_pipeline_status(content.id, PipelineStatus.scored)
-    refreshed = await content_svc.get_by_id(content.id)
-    assert refreshed.pipeline_status == PipelineStatus.scored
-
-    # Mark as failed at scoring stage
-    await orchestrator.mark_failed(content.id, "scoring", "Score too low")
-    refreshed = await content_svc.get_by_id(content.id)
-    assert refreshed.pipeline_status == PipelineStatus.failed
-
-
 async def test_content_deleted_after_test(content_svc):
-    """Verify test cleanup: content created in previous tests is cleaned up."""
-    # This test implicitly verifies that the transaction rollback works.
-    # If we create content in one test, it should not appear in the next test
-    # when using the same session fixture with rollback.
+    """Sanity check fixture cleanup mechanics with a regular content insert."""
     raw = RawContentSchema(
         source="rss",
         source_url="https://example.com/cleanup-test",

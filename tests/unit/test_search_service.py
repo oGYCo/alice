@@ -237,6 +237,16 @@ class TestSearch:
         _, call_params = mock_index.search.call_args[0]
         assert call_params["limit"] == 25
 
+    def test_search_custom_offset(self, search_service):
+        """Passing offset= includes offset in search params."""
+        service, (client, mock_index) = search_service
+        mock_index.search.return_value = {"hits": []}
+
+        service.search("rag", offset=30)
+
+        _, call_params = mock_index.search.call_args[0]
+        assert call_params["offset"] == 30
+
     def test_search_highlight_enabled_by_default(self, search_service):
         """highlight=True (default) includes attributesToHighlight in params."""
         service, (client, mock_index) = search_service

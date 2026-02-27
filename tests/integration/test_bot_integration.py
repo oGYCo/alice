@@ -9,14 +9,16 @@ Skip automatically when TEST_DATABASE_URL is not set.
 """
 
 import os
-from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from alice.bot.handlers.feedback import handle_feedback_callback, parse_callback_data
+from alice.bot.handlers.feedback import (
+    handle_feedback_callback_with_session_factory,
+    parse_callback_data,
+)
 from alice.models.base import Base
 from alice.models.feedback import Feedback, FeedbackType
 
@@ -134,6 +136,36 @@ async def session(engine, db_seed):
         await trans.rollback()
 
 
+@pytest.fixture(scope="module")
+def feedback_session_factory(engine):
+    """Session factory used by the feedback handler under test."""
+    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+class _FromUserStub:
+    def __init__(self, user_id: int) -> None:
+        self.id = user_id
+
+
+class _CallbackQueryStub:
+    def __init__(self, data: str, user_id: int) -> None:
+        self.data = data
+        self.from_user = _FromUserStub(user_id)
+        self.answer_calls: list[dict[str, str]] = []
+
+    async def answer(self, *, text: str) -> None:
+        self.answer_calls.append({"text": text})
+
+
+class _BotStub:
+    async def send_message(self, *_: object, **__: object) -> None:
+        return None
+
+
+def _make_query(data: str, user_id: int) -> _CallbackQueryStub:
+    return _CallbackQueryStub(data=data, user_id=user_id)
+
+
 # ---------------------------------------------------------------------------
 # parse_callback_data unit tests
 # ---------------------------------------------------------------------------
@@ -196,26 +228,18 @@ async def test_parse_callback_data_invalid_content_id():
 # ---------------------------------------------------------------------------
 
 
-async def test_handle_feedback_callback_stores_to_db(session, monkeypatch):
+async def test_handle_feedback_callback_stores_to_db(session, feedback_session_factory):
     """handle_feedback_callback stores Feedback record to test DB."""
-    # Mock AsyncSessionLocal to use test session
-    monkeypatch.setattr(
-        "alice.bot.handlers.feedback.AsyncSessionLocal",
-        lambda: AsyncMock(
-            __aenter__=AsyncMock(return_value=session), __aexit__=AsyncMock(return_value=None)
-        ),
-    )
+    query = _make_query(data="feedback:valuable_learned:123", user_id=999)
 
-    # Create mock CallbackQuery with data 'feedback:valuable_learned:123'
-    query = AsyncMock()
-    query.data = "feedback:valuable_learned:123"
-    query.from_user.id = 999
-
-    # Create mock Bot object
-    bot = AsyncMock()
+    bot = _BotStub()
 
     # Call handler
-    await handle_feedback_callback(query, bot)
+    await handle_feedback_callback_with_session_factory(
+        query,
+        bot,
+        session_factory=feedback_session_factory,
+    )
 
     # Verify Feedback was stored
     stmt = select(Feedback).where(Feedback.content_id == 123, Feedback.user_id == 999)
@@ -228,7 +252,7 @@ async def test_handle_feedback_callback_stores_to_db(session, monkeypatch):
     assert feedback.type == FeedbackType.valuable_learned
 
 
-async def test_handle_feedback_callback_all_feedback_types(session, monkeypatch):
+async def test_handle_feedback_callback_all_feedback_types(session, feedback_session_factory):
     """handle_feedback_callback handles all four feedback types."""
     test_cases = [
         ("valuable_learned", FeedbackType.valuable_learned),
@@ -238,22 +262,15 @@ async def test_handle_feedback_callback_all_feedback_types(session, monkeypatch)
     ]
 
     for type_str, expected_type in test_cases:
-        # Mock AsyncSessionLocal
-        monkeypatch.setattr(
-            "alice.bot.handlers.feedback.AsyncSessionLocal",
-            lambda: AsyncMock(
-                __aenter__=AsyncMock(return_value=session),
-                __aexit__=AsyncMock(return_value=None),
-            ),
+        query = _make_query(data=f"feedback:{type_str}:200", user_id=888)
+
+        bot = _BotStub()
+
+        await handle_feedback_callback_with_session_factory(
+            query,
+            bot,
+            session_factory=feedback_session_factory,
         )
-
-        query = AsyncMock()
-        query.data = f"feedback:{type_str}:200"
-        query.from_user.id = 888
-
-        bot = AsyncMock()
-
-        await handle_feedback_callback(query, bot)
 
         stmt = select(Feedback).where(
             Feedback.content_id == 200,
@@ -267,53 +284,38 @@ async def test_handle_feedback_callback_all_feedback_types(session, monkeypatch)
         assert feedback.type == expected_type
 
 
-async def test_handle_feedback_callback_answers_query(session, monkeypatch):
+async def test_handle_feedback_callback_answers_query(session, feedback_session_factory):
     """handle_feedback_callback calls query.answer() after storing."""
-    monkeypatch.setattr(
-        "alice.bot.handlers.feedback.AsyncSessionLocal",
-        lambda: AsyncMock(
-            __aenter__=AsyncMock(return_value=session),
-            __aexit__=AsyncMock(return_value=None),
-        ),
+    query = _make_query(data="feedback:valuable_learned:456", user_id=111)
+
+    bot = _BotStub()
+
+    await handle_feedback_callback_with_session_factory(
+        query,
+        bot,
+        session_factory=feedback_session_factory,
     )
-
-    query = AsyncMock()
-    query.data = "feedback:valuable_learned:456"
-    query.from_user.id = 111
-
-    bot = AsyncMock()
-
-    await handle_feedback_callback(query, bot)
 
     # Verify query.answer was called with a text message
-    query.answer.assert_called_once()
-    call_kwargs = query.answer.call_args.kwargs
-    assert "text" in call_kwargs
-    assert call_kwargs["text"] == "✅ 已记录！知识图谱已更新。"
+    assert len(query.answer_calls) == 1
+    assert query.answer_calls[0]["text"] == "✅ 已记录！知识图谱已更新。"
 
 
-async def test_handle_feedback_callback_invalid_data(session, monkeypatch):
+async def test_handle_feedback_callback_invalid_data(session, feedback_session_factory):
     """handle_feedback_callback handles invalid callback data gracefully."""
-    monkeypatch.setattr(
-        "alice.bot.handlers.feedback.AsyncSessionLocal",
-        lambda: AsyncMock(
-            __aenter__=AsyncMock(return_value=session),
-            __aexit__=AsyncMock(return_value=None),
-        ),
+    query = _make_query(data="invalid:callback:data", user_id=222)
+
+    bot = _BotStub()
+
+    await handle_feedback_callback_with_session_factory(
+        query,
+        bot,
+        session_factory=feedback_session_factory,
     )
 
-    query = AsyncMock()
-    query.data = "invalid:callback:data"
-    query.from_user.id = 222
-
-    bot = AsyncMock()
-
-    await handle_feedback_callback(query, bot)
-
     # Verify query.answer was called with error message (doesn't raise)
-    query.answer.assert_called_once()
-    call_kwargs = query.answer.call_args.kwargs
-    assert call_kwargs["text"] == "无效的反馈数据。"
+    assert len(query.answer_calls) == 1
+    assert query.answer_calls[0]["text"] == "无效的反馈数据。"
 
     # Verify no Feedback was stored
     stmt = select(Feedback).where(Feedback.user_id == 222)
@@ -322,30 +324,26 @@ async def test_handle_feedback_callback_invalid_data(session, monkeypatch):
     assert len(feedback_list) == 0
 
 
-async def test_handle_feedback_callback_multiple_users(session, monkeypatch):
+async def test_handle_feedback_callback_multiple_users(session, feedback_session_factory):
     """handle_feedback_callback isolates feedback by user_id."""
-    monkeypatch.setattr(
-        "alice.bot.handlers.feedback.AsyncSessionLocal",
-        lambda: AsyncMock(
-            __aenter__=AsyncMock(return_value=session),
-            __aexit__=AsyncMock(return_value=None),
-        ),
+    # First user provides feedback
+    query1 = _make_query(data="feedback:valuable_learned:500", user_id=1001)
+
+    bot = _BotStub()
+    await handle_feedback_callback_with_session_factory(
+        query1,
+        bot,
+        session_factory=feedback_session_factory,
     )
 
-    # First user provides feedback
-    query1 = AsyncMock()
-    query1.data = "feedback:valuable_learned:500"
-    query1.from_user.id = 1001
-
-    bot = AsyncMock()
-    await handle_feedback_callback(query1, bot)
-
     # Second user provides feedback on same content
-    query2 = AsyncMock()
-    query2.data = "feedback:not_valuable:500"
-    query2.from_user.id = 1002
+    query2 = _make_query(data="feedback:not_valuable:500", user_id=1002)
 
-    await handle_feedback_callback(query2, bot)
+    await handle_feedback_callback_with_session_factory(
+        query2,
+        bot,
+        session_factory=feedback_session_factory,
+    )
 
     # Verify both records exist with different types and user_ids
     stmt = select(Feedback).where(Feedback.content_id == 500).order_by(Feedback.user_id)
@@ -359,32 +357,30 @@ async def test_handle_feedback_callback_multiple_users(session, monkeypatch):
     assert feedbacks[1].type == FeedbackType.not_valuable
 
 
-async def test_handle_feedback_callback_same_user_multiple_feedbacks(session, monkeypatch):
+async def test_handle_feedback_callback_same_user_multiple_feedbacks(
+    session, feedback_session_factory
+):
     """handle_feedback_callback allows same user to feedback on multiple contents."""
-    monkeypatch.setattr(
-        "alice.bot.handlers.feedback.AsyncSessionLocal",
-        lambda: AsyncMock(
-            __aenter__=AsyncMock(return_value=session),
-            __aexit__=AsyncMock(return_value=None),
-        ),
-    )
-
     user_id = 2000
 
     # First feedback
-    query1 = AsyncMock()
-    query1.data = "feedback:valuable_learned:600"
-    query1.from_user.id = user_id
+    query1 = _make_query(data="feedback:valuable_learned:600", user_id=user_id)
 
-    bot = AsyncMock()
-    await handle_feedback_callback(query1, bot)
+    bot = _BotStub()
+    await handle_feedback_callback_with_session_factory(
+        query1,
+        bot,
+        session_factory=feedback_session_factory,
+    )
 
     # Second feedback
-    query2 = AsyncMock()
-    query2.data = "feedback:save_for_later:601"
-    query2.from_user.id = user_id
+    query2 = _make_query(data="feedback:save_for_later:601", user_id=user_id)
 
-    await handle_feedback_callback(query2, bot)
+    await handle_feedback_callback_with_session_factory(
+        query2,
+        bot,
+        session_factory=feedback_session_factory,
+    )
 
     # Verify both records exist
     stmt = select(Feedback).where(Feedback.user_id == user_id).order_by(Feedback.content_id)
@@ -398,22 +394,16 @@ async def test_handle_feedback_callback_same_user_multiple_feedbacks(session, mo
     assert feedbacks[1].type == FeedbackType.save_for_later
 
 
-async def test_feedback_timestamps_set_automatically(session, monkeypatch):
+async def test_feedback_timestamps_set_automatically(session, feedback_session_factory):
     """Feedback record has created_at and updated_at set automatically."""
-    monkeypatch.setattr(
-        "alice.bot.handlers.feedback.AsyncSessionLocal",
-        lambda: AsyncMock(
-            __aenter__=AsyncMock(return_value=session),
-            __aexit__=AsyncMock(return_value=None),
-        ),
+    query = _make_query(data="feedback:valuable_learned:700", user_id=3000)
+
+    bot = _BotStub()
+    await handle_feedback_callback_with_session_factory(
+        query,
+        bot,
+        session_factory=feedback_session_factory,
     )
-
-    query = AsyncMock()
-    query.data = "feedback:valuable_learned:700"
-    query.from_user.id = 3000
-
-    bot = AsyncMock()
-    await handle_feedback_callback(query, bot)
 
     stmt = select(Feedback).where(Feedback.content_id == 700)
     result = await session.execute(stmt)

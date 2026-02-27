@@ -21,13 +21,13 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
 
 import httpx
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from alice.config import settings
 from alice.db import get_db
 from alice.main import create_app
 from alice.models.base import Base
@@ -96,7 +96,11 @@ async def http_client(engine):
         async with factory() as sess:
             yield sess
     app.dependency_overrides[get_db] = override_get_db
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://test",
+        headers={"X-API-Key": settings.ALICE_API_KEY},
+    ) as client:
         yield client
     app.dependency_overrides.clear()
 
@@ -230,15 +234,16 @@ async def test_time_window_content_type_by_window():
     assert scheduler.get_content_type_for_window(evening) == "thought_provoking"
 
 
-def _make_mock_content(content_type: str) -> MagicMock:
-    content = MagicMock()
-    content.id = 1
-    content.title = "Test Title"
-    content.source_url = "https://example.com"
-    content.summary = "Test summary"
+def _make_card_content(content_type: str) -> Content:
+    content = _make_content(
+        id=1,
+        title="Test Title",
+        source_url="https://example.com",
+        summary="Test summary",
+        metadata_={"content_type": content_type, "push_reason": "Reason"},
+    )
     content.key_points = ["Point A", "Point B"]
     content.estimated_read_time = 5
-    content.metadata_ = {"content_type": content_type, "push_reason": "Reason"}
     return content
 
 
@@ -246,7 +251,7 @@ async def test_enhanced_card_deep_knowledge_type():
     """Deep knowledge cards have title and 6 buttons."""
     from alice.bot.handlers.push import build_push_card
 
-    content = _make_mock_content("deep_knowledge")
+    content = _make_card_content("deep_knowledge")
     text, markup = build_push_card(content)
     assert "Test Title" in text
     buttons = sum(len(row) for row in markup.inline_keyboard)
@@ -257,7 +262,7 @@ async def test_enhanced_card_time_sensitive_type():
     """Time-sensitive cards have title and 2 buttons."""
     from alice.bot.handlers.push import build_push_card
 
-    content = _make_mock_content("time_sensitive")
+    content = _make_card_content("time_sensitive")
     text, markup = build_push_card(content)
     assert "Test Title" in text
     buttons = sum(len(row) for row in markup.inline_keyboard)
@@ -268,7 +273,7 @@ async def test_enhanced_card_thought_provoking_type():
     """Thought-provoking cards have title and 4 buttons."""
     from alice.bot.handlers.push import build_push_card
 
-    content = _make_mock_content("thought_provoking")
+    content = _make_card_content("thought_provoking")
     text, markup = build_push_card(content)
     assert "Test Title" in text
     buttons = sum(len(row) for row in markup.inline_keyboard)

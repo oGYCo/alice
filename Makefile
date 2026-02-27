@@ -1,4 +1,4 @@
-.PHONY: up down test lint format migrate logs shell clean help
+.PHONY: up down test test-phase2 lint format migrate logs shell clean help
 
 help:
 	@echo "Alice — AI Secretary | Development Commands"
@@ -7,6 +7,7 @@ help:
 	@echo "  make up              Start all Docker services"
 	@echo "  make down            Stop all Docker services"
 	@echo "  make test            Run pytest on tests/ directory"
+	@echo "  make test-phase2     Run phase2 integration test with real env vars"
 	@echo "  make lint            Run ruff linter"
 	@echo "  make format          Format code with ruff"
 	@echo "  make migrate         Run Alembic migrations"
@@ -24,6 +25,14 @@ down:
 
 test:
 	uv run pytest tests/ -v
+
+test-phase2:
+	TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5433/alice_test" \
+	NEO4J_TEST_URI="bolt://localhost:7687" \
+	NEO4J_TEST_USER="neo4j" \
+	NEO4J_TEST_PASS="alice_neo4j" \
+	PHASE2_LLM_PROVIDER="ollama" \
+	uv run pytest tests/integration/test_phase2_integration.py -m integration -v
 
 lint:
 	uv run ruff check .

@@ -243,6 +243,17 @@ export NEO4J_TEST_USER="neo4j"
 export NEO4J_TEST_PASS="alice_neo4j"
 ```
 
+直接运行 `test_phase2_integration.py`（避免因缺少环境变量被 skip）：
+
+```bash
+TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5433/alice_test" \
+NEO4J_TEST_URI="bolt://localhost:7687" \
+NEO4J_TEST_USER="neo4j" \
+NEO4J_TEST_PASS="alice_neo4j" \
+PHASE2_LLM_PROVIDER="ollama" \
+uv run pytest tests/integration/test_phase2_integration.py -m integration -v
+```
+
 ### 8.3 前端 E2E
 
 ```bash

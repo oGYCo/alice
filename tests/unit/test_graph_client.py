@@ -245,12 +245,16 @@ async def test_get_user_knowledge_passes_user_id(mock_graph_client):
 
 async def test_get_content_subgraph_returns_list(mock_graph_client):
     mock_graph_client.execute_query = AsyncMock(
-        return_value=[{"c": {"id": 42}, "rel_type": "DISCUSSES", "n": {"name": "attention"}}]
+        side_effect=[
+            [{"name": "attention", "labels": ["Concept"]}],  # nodes query
+            [{"from_name": "attention", "relation": "PREREQUISITE_OF", "to_name": "transformer"}],  # edges query
+        ]
     )
     repo = GraphRepository(mock_graph_client)
     result = await repo.get_content_subgraph(content_id=42)
-    assert isinstance(result, list)
-    assert result[0]["rel_type"] == "DISCUSSES"
+    assert isinstance(result, dict)
+    assert len(result["nodes"]) == 1
+    assert result["nodes"][0]["name"] == "attention"
 
 
 async def test_get_content_subgraph_passes_content_id(mock_graph_client):

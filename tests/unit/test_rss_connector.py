@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest  # type: ignore
 
@@ -22,7 +23,7 @@ async def test_rss_connector_fetch_dedupes_and_normalizes_urls(
 ) -> None:
     connector = RSSConnector()
     feed_xml = fixtures_dir().joinpath("sample_hn.xml").read_text()
-    monkeypatch.setattr(connector, "_fetch_feed", lambda _url: feed_xml)
+    monkeypatch.setattr(connector, "_fetch_feed", lambda _url, _headers=None: feed_xml)
     monkeypatch.setattr(connector, "_extract_full_text", lambda _url: ("Full text", None))
 
     config = SourceConfigSchema(name="HN", url="https://hnrss.org/frontpage", type="rss")
@@ -42,7 +43,7 @@ async def test_rss_connector_fetch_dedupes_and_normalizes_urls(
 async def test_rss_connector_falls_back_to_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     connector = RSSConnector()
     feed_xml = fixtures_dir().joinpath("sample_tech.xml").read_text()
-    monkeypatch.setattr(connector, "_fetch_feed", lambda _url: feed_xml)
+    monkeypatch.setattr(connector, "_fetch_feed", lambda _url, _headers=None: feed_xml)
     monkeypatch.setattr(connector, "_extract_full_text", lambda _url: (None, "blocked"))
 
     config = SourceConfigSchema(name="Tech", url="https://example.org/feed", type="rss")
@@ -61,7 +62,7 @@ async def test_rss_connector_falls_back_to_summary(monkeypatch: pytest.MonkeyPat
 async def test_rss_connector_skips_entries_without_links(monkeypatch: pytest.MonkeyPatch) -> None:
     connector = RSSConnector()
     feed_xml = fixtures_dir().joinpath("sample_tech.xml").read_text()
-    monkeypatch.setattr(connector, "_fetch_feed", lambda _url: feed_xml)
+    monkeypatch.setattr(connector, "_fetch_feed", lambda _url, _headers=None: feed_xml)
     monkeypatch.setattr(connector, "_extract_full_text", lambda _url: ("Body", None))
 
     config = SourceConfigSchema(name="Tech", url="https://example.org/feed", type="rss")
@@ -69,3 +70,31 @@ async def test_rss_connector_skips_entries_without_links(monkeypatch: pytest.Mon
 
     assert len(results) == 1
     assert results[0].source_url == "https://example.org/atom-entry"
+
+
+def test_rss_connector_fetch_feed_uses_default_headers(monkeypatch: pytest.MonkeyPatch) -> None:
+    connector = RSSConnector()
+
+    response = MagicMock()
+    response.text = "<rss></rss>"
+    response.raise_for_status.return_value = None
+
+    calls: dict[str, object] = {}
+
+    def fake_get(url: str, **kwargs):
+        calls["url"] = url
+        calls["kwargs"] = kwargs
+        return response
+
+    monkeypatch.setattr(_rss_module.httpx, "get", fake_get)
+
+    out = connector._fetch_feed("https://example.com/feed.xml")
+
+    assert out == "<rss></rss>"
+    assert calls["url"] == "https://example.com/feed.xml"
+    kwargs = calls["kwargs"]
+    assert isinstance(kwargs, dict)
+    headers = kwargs.get("headers")
+    assert isinstance(headers, dict)
+    assert "User-Agent" in headers
+    assert kwargs.get("follow_redirects") is True

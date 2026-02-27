@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from typing import Protocol, cast
 
 import structlog
@@ -46,6 +47,19 @@ class KnowledgeGap(BaseModel):
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))
+
+
+def _to_python_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    to_native = getattr(value, "to_native", None)
+    if callable(to_native):
+        native = to_native()
+        if isinstance(native, datetime):
+            return native
+    return None
 
 
 class UserKnowledgeGraph:
@@ -103,7 +117,7 @@ class UserKnowledgeGraph:
             KnowledgeNode(
                 concept=row["concept"],
                 mastery=row["mastery"],
-                last_reviewed=row.get("last_reviewed"),
+                last_reviewed=_to_python_datetime(row.get("last_reviewed")),
                 aliases=row.get("aliases") or [],
             )
             for row in rows

@@ -117,6 +117,7 @@ class TestSearchEndpoint:
         # service receives the limit
         call_kwargs = mock_search_service.search.call_args[1]
         assert call_kwargs["limit"] == 5
+        assert call_kwargs["offset"] == 10
 
     def test_search_empty_query_returns_400(self, client, mock_search_service):
         """GET /search?q= (empty string) returns 400 Bad Request."""

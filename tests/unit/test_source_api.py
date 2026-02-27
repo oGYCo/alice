@@ -18,6 +18,8 @@ from alice.schemas.source import SourceConfigSchema
 # Helpers
 # ---------------------------------------------------------------------------
 
+_AUTH_HEADERS = {"X-API-Key": "alicesecret"}
+
 
 def _make_source(**kwargs) -> MagicMock:
     """Create a mock Source ORM object."""
@@ -71,6 +73,7 @@ class TestCreateSource:
                     "enabled": True,
                     "fetch_interval_minutes": 30,
                 },
+                headers=_AUTH_HEADERS,
             )
 
         assert resp.status_code == 201
@@ -94,6 +97,7 @@ class TestCreateSource:
                     "type": "rss",
                     "config": {},
                 },
+                headers=_AUTH_HEADERS,
             )
 
         mock_svc.create.assert_called_once()
@@ -114,6 +118,7 @@ class TestCreateSource:
                     "type": "twitter",  # invalid
                     "config": {},
                 },
+                headers=_AUTH_HEADERS,
             )
 
         assert resp.status_code == 422
@@ -133,7 +138,7 @@ class TestListSources:
 
         app = _app_with_mock_service(mock_svc)
         with TestClient(app) as client:
-            resp = client.get("/api/v1/sources")
+            resp = client.get("/api/v1/sources", headers=_AUTH_HEADERS)
 
         assert resp.status_code == 200
         data = resp.json()
@@ -147,7 +152,7 @@ class TestListSources:
 
         app = _app_with_mock_service(mock_svc)
         with TestClient(app) as client:
-            resp = client.get("/api/v1/sources")
+            resp = client.get("/api/v1/sources", headers=_AUTH_HEADERS)
 
         assert resp.status_code == 200
         assert resp.json() == []
@@ -170,6 +175,7 @@ class TestUpdateSource:
             resp = client.put(
                 "/api/v1/sources/5",
                 json={"fetch_interval_minutes": 60},
+                headers=_AUTH_HEADERS,
             )
 
         assert resp.status_code == 200
@@ -187,6 +193,7 @@ class TestUpdateSource:
             resp = client.put(
                 "/api/v1/sources/99",
                 json={"fetch_interval_minutes": 60},
+                headers=_AUTH_HEADERS,
             )
 
         assert resp.status_code == 404
@@ -202,6 +209,7 @@ class TestUpdateSource:
             client.put(
                 "/api/v1/sources/3",
                 json={"enabled": False},
+                headers=_AUTH_HEADERS,
             )
 
         mock_svc.update_source.assert_called_once()
@@ -219,6 +227,7 @@ class TestUpdateSource:
             resp = client.put(
                 "/api/v1/sources/1",
                 json={"name": "New Name"},
+                headers=_AUTH_HEADERS,
             )
 
         assert resp.status_code == 200
@@ -237,7 +246,7 @@ class TestDeleteSource:
 
         app = _app_with_mock_service(mock_svc)
         with TestClient(app) as client:
-            resp = client.delete("/api/v1/sources/1")
+            resp = client.delete("/api/v1/sources/1", headers=_AUTH_HEADERS)
 
         assert resp.status_code == 204
         assert resp.content == b""
@@ -249,7 +258,7 @@ class TestDeleteSource:
 
         app = _app_with_mock_service(mock_svc)
         with TestClient(app) as client:
-            resp = client.delete("/api/v1/sources/99")
+            resp = client.delete("/api/v1/sources/99", headers=_AUTH_HEADERS)
 
         assert resp.status_code == 404
 
@@ -260,6 +269,6 @@ class TestDeleteSource:
 
         app = _app_with_mock_service(mock_svc)
         with TestClient(app) as client:
-            client.delete("/api/v1/sources/7")
+            client.delete("/api/v1/sources/7", headers=_AUTH_HEADERS)
 
         mock_svc.delete_source.assert_called_once_with(7)

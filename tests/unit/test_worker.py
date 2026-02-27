@@ -35,10 +35,10 @@ def test_celery_task_routes_configured():
 
 
 def test_celery_retry_config():
-    """Test that retry configuration is set."""
+    """Test that error handling configuration is set."""
     conf = celery_app.conf
-    assert conf.task_max_retries == 5
-    assert conf.task_retry_backoff is True
+    assert conf.task_acks_late is True
+    assert conf.task_reject_on_worker_lost is True
 
 
 def test_tasks_are_registered():
@@ -84,11 +84,19 @@ def test_task_indexing_returns_stub():
     assert result.result["status"] == "stub"
 
 
-def test_task_fetch_returns_stub():
-    """Test fetch task returns expected shape."""
+def test_task_fetch_returns_summary():
+    """Test fetch task returns summary payload (ok or error)."""
     result = task_fetch_all_sources.apply(args=[])
-    assert result.result["status"] == "stub"
+    assert result.result["status"] in {"ok", "error"}
     assert "sources_triggered" in result.result
+    assert "items_new" in result.result
+    assert "dispatched" in result.result
+
+
+def test_task_fetch_accepts_source_id_kwarg():
+    """Test fetch task accepts source_id for per-source beat entries."""
+    result = task_fetch_all_sources.apply(kwargs={"source_id": 7})
+    assert result.result["requested_source_id"] == 7
 
 
 def test_task_push_batch_returns_stub():

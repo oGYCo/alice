@@ -1,4 +1,4 @@
-import type { ContentItem, ContentDetail, SearchResult, SearchHit, Source, PushPreferences, DashboardStats } from './types';
+import type { ContentItem, ContentDetail, SearchResult, SearchHit, Source, PushPreferences, DashboardStats, KGGraph, KGCommunity, KGGapAnalysis } from './types';
 import { useAuthStore } from './store';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -167,6 +167,45 @@ export class AliceApiClient {
 
   async getDashboardStats(userId = 1): Promise<DashboardStats> {
     return this.request(`/api/v1/dashboard/stats?user_id=${userId}`);
+  }
+
+  async getKGGraph(options: { userId?: number; depth?: number; center?: string; maxNodes?: number } = {}): Promise<KGGraph> {
+    const { userId = 1, depth = 3, center, maxNodes = 200 } = options;
+    const params = new URLSearchParams({
+      user_id: String(userId),
+      depth: String(depth),
+      max_nodes: String(maxNodes),
+    });
+    if (center) params.set('center', center);
+    return this.request(`/api/v1/kg/graph?${params.toString()}`);
+  }
+
+  async getKGCommunities(userId = 1): Promise<KGCommunity[]> {
+    return this.request(`/api/v1/kg/communities?user_id=${userId}`);
+  }
+
+  async getKGGaps(userId = 1, limit = 10): Promise<KGGapAnalysis> {
+    return this.request(`/api/v1/kg/gaps?user_id=${userId}&limit=${limit}`);
+  }
+
+  async updateKGNode(nodeId: string, data: { mastery?: number; name?: string }, userId = 1): Promise<{ name: string; mastery?: number; updated: boolean }> {
+    return this.request(`/api/v1/kg/node/${encodeURIComponent(nodeId)}?user_id=${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createKGEdge(source: string, target: string, relation: string, userId = 1): Promise<{ id: string; source: string; target: string; relation: string; created: boolean }> {
+    return this.request(`/api/v1/kg/edge?user_id=${userId}`, {
+      method: 'POST',
+      body: JSON.stringify({ source, target, relation }),
+    });
+  }
+
+  async deleteKGEdge(edgeId: string, userId = 1): Promise<{ deleted: boolean; edge_id: string }> {
+    return this.request(`/api/v1/kg/edge/${encodeURIComponent(edgeId)}?user_id=${userId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

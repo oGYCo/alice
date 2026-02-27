@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Home, Search, Settings, PlusCircle, ChevronLeft, LogOut, LayoutDashboard } from 'lucide-react';
+import { Home, Search, Settings, PlusCircle, ChevronLeft, LogOut, LayoutDashboard, GitBranch } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSidebarStore, useAuthStore } from '@/lib/store';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 const navItems = [
   { href: '/', label: 'Feed', icon: Home },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/knowledge-graph', label: '知识图谱', icon: GitBranch },
   { href: '/search', label: 'Search', icon: Search },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

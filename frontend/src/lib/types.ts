@@ -170,3 +170,47 @@ export interface DashboardStats {
   review_schedule: ReviewScheduleStats;
   mode_info: ModeInfo;
 }
+
+// Knowledge Graph Visualization types
+export interface KGNode {
+  id: string;
+  name: string;
+  label: string; // Concept | Method | Tool | Theory
+  mastery: number; // 0-1
+  community_id: number | null;
+  aliases: string[];
+}
+
+export interface KGEdge {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface KGGraph {
+  nodes: KGNode[];
+  edges: KGEdge[];
+  total_nodes: number;
+  total_edges: number;
+}
+
+export interface KGCommunity {
+  community_id: number;
+  label: string;
+  concept_count: number;
+  avg_mastery: number;
+  concepts: string[];
+}
+
+export interface KGGapSuggestion {
+  concept: string;
+  mastery: number;
+  adjacent_mastered: string[];
+  reason: string;
+}
+
+export interface KGGapAnalysis {
+  gaps: KGGapSuggestion[];
+  total_gaps: number;
+}

@@ -11,12 +11,16 @@ vi.mock('next/link', () => ({
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/feed',
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock('@/lib/store', () => ({
   useSidebarStore: () => ({
     isOpen: true,
     toggleSidebar: vi.fn(),
+  }),
+  useAuthStore: () => ({
+    logout: vi.fn(),
   }),
 }));
 
@@ -27,25 +31,25 @@ vi.mock('@/lib/api', () => ({
 }));
 
 describe('Sidebar', () => {
-  it('renders with data-testid="sidebar"', () => {
+  it('renders with data-testid="sidebar"', async () => {
     render(<Sidebar />);
-    expect(screen.getByTestId('sidebar')).toBeDefined();
+    expect(await screen.findByTestId('sidebar')).toBeDefined();
   });
 
-  it('renders Alice title when open', () => {
+  it('renders Alice title when open', async () => {
     render(<Sidebar />);
-    expect(screen.getByText('Alice')).toBeDefined();
+    expect(await screen.findByText('Alice')).toBeDefined();
   });
 
-  it('renders navigation links', () => {
+  it('renders navigation links', async () => {
     render(<Sidebar />);
-    expect(screen.getByText('Feed')).toBeDefined();
-    expect(screen.getByText('Search')).toBeDefined();
-    expect(screen.getByText('Settings')).toBeDefined();
+    expect(await screen.findByText('Feed')).toBeDefined();
+    expect(await screen.findByText('Search')).toBeDefined();
+    expect(await screen.findByText('Settings')).toBeDefined();
   });
 
-  it('renders Sources section when open', () => {
+  it('renders Sources section when open', async () => {
     render(<Sidebar />);
-    expect(screen.getByText('Sources')).toBeDefined();
+    expect(await screen.findByText('Sources')).toBeDefined();
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AliceApiClient } from '../lib/api';
+import { useAuthStore } from '../lib/store';
 
 describe('AliceApiClient', () => {
   let client: AliceApiClient;
@@ -7,6 +8,7 @@ describe('AliceApiClient', () => {
   beforeEach(() => {
     client = new AliceApiClient('http://localhost:8000');
     global.fetch = vi.fn();
+    useAuthStore.getState().logout();
   });
 
   it('calls correct URL for getContent', async () => {
@@ -31,9 +33,9 @@ describe('AliceApiClient', () => {
   });
 
   it('includes API key header when provided', async () => {
-    const clientWithKey = new AliceApiClient('http://localhost:8000', 'test-key');
+    useAuthStore.getState().setApiKey('test-key');
     vi.mocked(fetch).mockResolvedValueOnce(new Response(JSON.stringify([]), { status: 200 }));
-    await clientWithKey.getSources();
+    await client.getSources();
     const callArgs = vi.mocked(fetch).mock.calls[0];
     expect((callArgs[1] as RequestInit & { headers: Record<string, string> }).headers['X-API-Key']).toBe('test-key');
   });

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ContentDetailPage from '@/app/content/[id]/page';
 import { apiClient } from '@/lib/api';
+import type { ContentDetail } from '@/lib/types';
 
 // Mock dependencies
 vi.mock('next/navigation', () => ({
@@ -13,6 +14,14 @@ vi.mock('@/lib/api', () => ({
     getContentDetail: vi.fn(),
     submitFeedback: vi.fn(),
   },
+}));
+
+vi.mock('@/components/content/ContentSubgraph', () => ({
+  ContentSubgraph: ({ subgraph }: { subgraph: { nodes?: Array<{ name: string }> } | null }) => (
+    <div data-testid="content-subgraph-mock">
+      {subgraph?.nodes?.map((n) => n.name).join(', ') ?? ''}
+    </div>
+  ),
 }));
 
 // Mock Lucide icons to avoid rendering issues in tests if any
@@ -28,7 +37,7 @@ describe('ContentDetailPage', () => {
   const mockGetContentDetail = vi.mocked(apiClient.getContentDetail);
   const mockSubmitFeedback = vi.mocked(apiClient.submitFeedback);
 
-  const mockContent = {
+  const mockContent: ContentDetail = {
     id: 1,
     title: 'Test Content',
     url: 'https://example.com',
@@ -43,14 +52,14 @@ describe('ContentDetailPage', () => {
     published_at: null,
     pushed_at: null,
     metadata_: {},
-    key_takeaways: ['Takeaway 1', 'Takeaway 2'],
-    push_reason: 'Relevant to your interests.',
-    reading_suggestion: 'Skim reading.',
+    key_points: ['Takeaway 1', 'Takeaway 2'],
+    domains: ['AI', 'Engineering'],
+    estimated_read_time: 5,
     full_content: '# Full Content\n\nThis is the full content body.',
     subgraph: {
       nodes: [
-        { id: '1', label: 'Concept A', mastery: 0.8 },
-        { id: '2', label: 'Concept B', mastery: 0.2 },
+        { id: '1', name: 'Concept A', label: 'Concept', mastery: 0.8 },
+        { id: '2', name: 'Concept B', label: 'Concept', mastery: 0.2 },
       ],
       edges: [
         { from: '1', to: '2', relation: 'relates_to' },
@@ -85,9 +94,8 @@ describe('ContentDetailPage', () => {
 
     expect(screen.getByText('This is a summary.')).toBeDefined();
     expect(screen.getByText('Takeaway 1')).toBeDefined();
-    expect(screen.getByText('Relevant to your interests.')).toBeDefined();
-    expect(screen.getByText('Skim reading.')).toBeDefined();
-    expect(screen.getByText('Concept A')).toBeDefined(); // Subgraph node
+    expect(screen.getByText('约 5 分钟')).toBeDefined();
+    expect(screen.getByTestId('content-subgraph-mock')).toHaveTextContent('Concept A');
   });
 
   it('renders original content with markdown', async () => {

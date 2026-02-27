@@ -26,25 +26,32 @@ const mockItem: ContentItem = {
   metadata_: null,
 };
 
+const defaultProps = {
+  onDelete: () => {},
+  isSelectMode: false,
+  isSelected: false,
+  onToggleSelect: () => {},
+};
+
 describe('ContentCard', () => {
   it('renders without crash', () => {
-    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" />);
+    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" {...defaultProps} />);
     expect(screen.getByTestId('content-card')).toBeInTheDocument();
   });
 
   it('shows title and summary', () => {
-    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" />);
+    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" {...defaultProps} />);
     expect(screen.getByText('Test Content Title')).toBeInTheDocument();
     expect(screen.getByText('This is a test summary for the content card.')).toBeInTheDocument();
   });
 
   it('shows content_type badge with correct label', () => {
-    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" />);
+    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" {...defaultProps} />);
     expect(screen.getByText('硬核知识')).toBeInTheDocument();
   });
 
   it('shows all feedback buttons', () => {
-    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" />);
+    render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" {...defaultProps} />);
     // In grid mode, buttons have titles
     expect(screen.getByTitle('高质量')).toBeInTheDocument();
     expect(screen.getByTitle('稍后再看')).toBeInTheDocument();
@@ -54,18 +61,18 @@ describe('ContentCard', () => {
 
   it('clicking like button calls onFeedback with correct args', () => {
     const handleFeedback = vi.fn();
-    render(<ContentCard item={mockItem} onFeedback={handleFeedback} viewMode="grid" />);
+    render(<ContentCard item={mockItem} onFeedback={handleFeedback} viewMode="grid" {...defaultProps} />);
     
     fireEvent.click(screen.getByTitle('高质量'));
     expect(handleFeedback).toHaveBeenCalledWith(1, 'positive');
   });
 
   it('renders different layout classes for grid vs list', () => {
-    const { rerender } = render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" />);
+    const { rerender } = render(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="grid" {...defaultProps} />);
     const card = screen.getByTestId('content-card');
     expect(card.className).toContain('flex-col');
     
-    rerender(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="list" />);
+    rerender(<ContentCard item={mockItem} onFeedback={() => {}} viewMode="list" {...defaultProps} />);
     const updatedCard = screen.getByTestId('content-card');
     expect(updatedCard.className).toContain('flex-row');
   });

@@ -82,9 +82,6 @@ def ensure_test_database() -> None:
             await conn.close()
 
     try:
-        asyncio.get_event_loop().run_until_complete(_create_db())
-    except RuntimeError:
-        # No running event loop — create a new one
         asyncio.run(_create_db())
     except Exception:
         # Connection failed — PostgreSQL likely not running; tests will skip

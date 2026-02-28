@@ -44,8 +44,14 @@ def configure_real_broker() -> None:
 
     settings.CELERY_BROKER_URL = TEST_REDIS_URL
     settings.REDIS_URL = TEST_REDIS_URL
-    celery_app.conf.broker_url = TEST_REDIS_URL
-    celery_app.conf.result_backend = TEST_REDIS_URL
+
+    # Close existing connections so the new broker URL takes full effect.
+    celery_app.close()
+    celery_app.conf.update(
+        broker_url=TEST_REDIS_URL,
+        result_backend=TEST_REDIS_URL,
+        task_create_missing_queues=True,
+    )
 
     client.flushdb()
     yield
@@ -129,7 +135,10 @@ async def test_advance_pipeline_gatekeeper_passed_enqueues_understanding(
     await orchestrator.advance_pipeline(content.id, "gatekeeper", {"passed": True})
     after = redis_client.llen("pipeline")
 
-    assert after == before + 1
+    assert after == before + 1, (
+        f"Expected 'pipeline' queue length {before + 1}, got {after}. "
+        f"Redis keys after dispatch: {[k.decode() for k in redis_client.keys('*')]}"
+    )
     refreshed = await content_svc.get_by_id(content.id)
     assert refreshed is not None
     assert refreshed.pipeline_status != PipelineStatus.failed
@@ -193,7 +202,10 @@ async def test_advance_pipeline_understood_enqueues_scoring(orchestrator, conten
     await orchestrator.advance_pipeline(content.id, "understood", {})
     after = redis_client.llen("pipeline")
 
-    assert after == before + 1
+    assert after == before + 1, (
+        f"Expected 'pipeline' queue length {before + 1}, got {after}. "
+        f"Redis keys after dispatch: {[k.decode() for k in redis_client.keys('*')]}"
+    )
 
 
 async def test_advance_pipeline_indexed_terminal_state(orchestrator, content_svc, redis_client):

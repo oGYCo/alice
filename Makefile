@@ -24,6 +24,7 @@ down:
 	docker compose down
 
 test:
+	TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5432/alice_test" \
 	uv run pytest tests/ -v
 
 test-phase2:

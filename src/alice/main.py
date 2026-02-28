@@ -1,8 +1,8 @@
 """FastAPI application factory and main entry point."""
 
 import importlib
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request  # type: ignore[import-not-found]
 from fastapi.responses import JSONResponse

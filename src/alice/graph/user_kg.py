@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import structlog
 from pydantic import BaseModel

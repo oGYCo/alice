@@ -17,20 +17,18 @@ Override with TEST_DATABASE_URL / NEO4J_TEST_URI env vars if needed.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from alice.graph.client import GraphClient
-from alice.graph.extractor import ContentSubgraph, ContentSubgraphNode
 from alice.graph.repository import GraphRepository
 from alice.graph.user_kg import UserKnowledgeGraph
 from alice.models import Base
 from alice.models.content import Content, PipelineStatus
 from alice.models.user import User
-from alice.services.matching import MatchingService
 from alice.services.push import PushService
 from alice.services.ranking import RankingService
 

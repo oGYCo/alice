@@ -1,7 +1,6 @@
 """Content-related Pydantic schemas."""
 
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 

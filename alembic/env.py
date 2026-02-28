@@ -8,8 +8,8 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
 from alice.config import settings
+
 # Import models for autogenerate
 from alice.models import Base
 

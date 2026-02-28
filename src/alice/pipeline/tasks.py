@@ -680,7 +680,7 @@ def task_schedule_push_batches(self) -> dict:
     """
 
     async def _run() -> dict:
-        from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+        from datetime import UTC, datetime  # noqa: PLC0415
 
         from sqlalchemy import func, select  # noqa: PLC0415
 

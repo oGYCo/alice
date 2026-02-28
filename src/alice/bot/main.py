@@ -18,7 +18,10 @@ from aiohttp import web
 
 from alice.bot.handlers import commands
 from alice.bot.handlers import feedback as feedback_handler
+from alice.bot.handlers import review as review_handler
+from alice.bot.handlers.commands import MODE_NAMES
 from alice.config import settings
+from alice.services.user_state import UserMode, get_user_state_manager
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +55,29 @@ def create_app() -> web.Application:
     @dp.callback_query(lambda q: q.data and q.data.startswith("discuss:"))
     async def _discuss_cb(query: CallbackQuery) -> None:
         await feedback_handler.handle_discuss(query, bot)
+
+    # Register review card rating callback (review:{card_id}:{rating})
+    @dp.callback_query(lambda q: q.data and q.data.startswith("review:"))
+    async def _review_cb(query: CallbackQuery) -> None:
+        await review_handler.handle_review_callback(query, bot)
+
+    # Register mode switch callback (mode:{mode_value})
+    @dp.callback_query(lambda q: q.data and q.data.startswith("mode:"))
+    async def _mode_cb(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        if len(parts) != 2:
+            await query.answer(text="无效操作。")
+            return
+        try:
+            target = UserMode(parts[1])
+        except ValueError:
+            await query.answer(text="无效模式。")
+            return
+        user_id = query.from_user.id
+        mgr = get_user_state_manager()
+        result = mgr.transition(user_id, target)
+        name = MODE_NAMES.get(result.new_mode, str(result.new_mode))
+        await query.answer(text=f"✅ 已切换到 {name}")
 
     # Build aiohttp app and register webhook handler
     app = web.Application()

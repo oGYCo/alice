@@ -183,3 +183,28 @@ class TestExtractTopics:
         topics = MemoryManager.extract_topics_from_declaration("attention attention attention")
         unique = list(set(t.lower() for t in topics))
         assert len(topics) == len(unique)
+
+    def test_extracts_chinese_topics(self):
+        """Chinese character sequences (2+ chars) are extracted as topics."""
+        topics = MemoryManager.extract_topics_from_declaration(
+            "我在研究注意力机制和深度学习"
+        )
+        assert len(topics) > 0
+        # Should extract multi-char CJK sequences like 注意力机制, 深度学习
+        assert any(len(t) >= 2 for t in topics)
+
+    def test_extracts_mixed_bilingual_topics(self):
+        """Mixed Chinese-English declarations extract both languages."""
+        topics = MemoryManager.extract_topics_from_declaration(
+            "研究Transformer模型在自然语言处理中的应用"
+        )
+        english_topics = [t for t in topics if t.isascii()]
+        chinese_topics = [t for t in topics if not t.isascii()]
+        assert len(english_topics) > 0, "Should extract English word 'Transformer'"
+        assert len(chinese_topics) > 0, "Should extract Chinese sequences"
+
+    def test_single_cjk_char_not_extracted(self):
+        """Single CJK characters should NOT be extracted (too short)."""
+        topics = MemoryManager.extract_topics_from_declaration("我 在 学")
+        # Each is a single char, none should match the 2+ requirement
+        assert len(topics) == 0

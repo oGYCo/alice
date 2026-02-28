@@ -114,6 +114,40 @@ class TestComputeSimhash:
         distance = dedup.hamming_distance(hash1, hash2)
         assert distance <= 15
 
+    def test_compute_simhash_chinese_text_nonzero(self, dedup: DeduplicationService) -> None:
+        """Chinese text should produce a non-zero fingerprint via CJK bigrams."""
+        text = "人工智能技术正在改变世界"
+        result = dedup.compute_simhash(text)
+        assert result != 0
+
+    def test_compute_simhash_chinese_different_texts_differ(self, dedup: DeduplicationService) -> None:
+        """Two different Chinese texts produce different hashes."""
+        text1 = "人工智能技术正在改变世界的每一个角落"
+        text2 = "今天天气晴朗适合出门散步和运动"
+        hash1 = dedup.compute_simhash(text1)
+        hash2 = dedup.compute_simhash(text2)
+        assert hash1 != hash2
+
+    def test_compute_simhash_chinese_similar_texts_close(self, dedup: DeduplicationService) -> None:
+        """Two near-identical Chinese texts have small hamming distance."""
+        text1 = "深度学习模型在自然语言处理中的应用研究"
+        text2 = "深度学习模型在自然语言处理中的应用分析"  # 研究→分析
+        hash1 = dedup.compute_simhash(text1)
+        hash2 = dedup.compute_simhash(text2)
+        distance = dedup.hamming_distance(hash1, hash2)
+        assert distance <= 15
+
+    def test_compute_simhash_mixed_bilingual(self, dedup: DeduplicationService) -> None:
+        """Mixed Chinese-English text produces a non-zero fingerprint."""
+        text = "Transformer模型在NLP任务中表现优异"
+        result = dedup.compute_simhash(text)
+        assert result != 0
+
+    def test_compute_simhash_single_cjk_char(self, dedup: DeduplicationService) -> None:
+        """A single CJK character still produces a non-zero fingerprint."""
+        result = dedup.compute_simhash("人")
+        assert result != 0
+
 
 # ---------------------------------------------------------------------------
 # TestHammingDistance

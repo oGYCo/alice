@@ -247,8 +247,15 @@ class MemoryManager:
 
     @staticmethod
     def extract_topics_from_declaration(declaration: str) -> list[str]:
-        """Extract candidate topic keywords from a free-text declaration."""
-        words = re.findall(r"\b[A-Za-z][A-Za-z0-9_\-]{2,}\b", declaration)
+        """Extract candidate topic keywords from a free-text declaration.
+
+        Supports both English words (3+ chars starting with a letter) and
+        Chinese character sequences (2+ CJK characters).
+        """
+        words = re.findall(
+            r"[A-Za-z][A-Za-z0-9_\-]{2,}|[\u4e00-\u9fff\u3400-\u4dbf]{2,}",
+            declaration,
+        )
         seen: set[str] = set()
         topics = []
         for w in words:

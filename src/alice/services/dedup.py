@@ -74,14 +74,22 @@ class DeduplicationService:
 
         Algorithm:
         1. Tokenize text into words (lowercase, strip punctuation)
+           - English / numeric words: split on whitespace/punct
+           - CJK characters: character bigrams (sliding window of 2)
         2. For each token, compute MD5 hash → treat as bit vector
         3. Accumulate weighted bit counts
         4. Final bit = 1 if count > 0, else 0
         """
         if not text:
             return 0
-        # Tokenize: lowercase words only
+        # Tokenize: English/numeric words
         tokens = re.findall(r"[a-z0-9]+", text.lower())
+        # CJK character bigrams for Chinese / Japanese / Korean text
+        cjk_chars = re.findall(r"[\u4e00-\u9fff\u3400-\u4dbf]", text)
+        if len(cjk_chars) >= 2:
+            tokens.extend(cjk_chars[i] + cjk_chars[i + 1] for i in range(len(cjk_chars) - 1))
+        elif len(cjk_chars) == 1:
+            tokens.append(cjk_chars[0])
         if not tokens:
             return 0
         # Accumulate bit counts

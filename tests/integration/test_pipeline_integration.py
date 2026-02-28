@@ -62,6 +62,15 @@ def configure_real_broker() -> None:
     # connection that will re-declare exchange bindings in the clean Redis.
     celery_app.close()
 
+    # Force kombu to re-declare exchange/queue bindings in the freshly
+    # flushed Redis.  Without this, the publish path in newer kombu (>= 5.3)
+    # may fail silently: exchange.deliver() looks up _kombu.binding.* sets
+    # that no longer exist after flushdb(), causing messages to be dropped.
+    with celery_app.connection_for_write() as conn:
+        channel = conn.default_channel
+        for queue_name in ("celery", "pipeline", "push", "fetch"):
+            channel.queue_declare(queue_name)
+
     yield
     client.flushdb()
     client.close()
@@ -126,12 +135,19 @@ def orchestrator(content_svc):
 def _count_dispatched(client: redis.Redis) -> int:
     """Count Celery tasks pending in Redis.
 
-    The kombu Redis transport may store dispatched messages in the named
-    queue list (e.g. 'pipeline') OR in the 'unacked' hash (broker-side
-    acknowledgement tracking).  We check both to be transport-version
-    agnostic.
+    The kombu Redis transport may store dispatched messages in:
+    - The named queue list (e.g. ``pipeline``)
+    - Priority sub-keys (e.g. ``pipeline\\x06\\x16{priority}``)
+    - The ``unacked`` hash (broker-side ack tracking)
+    We check all three to be transport-version agnostic.
     """
     queued = client.llen("pipeline")
+    # Newer kombu may split queues into priority buckets whose key
+    # contains a ``\\x06\\x16`` separator (e.g. ``pipeline\\x06\\x166``).
+    for key in client.keys(b"pipeline*"):
+        key_name = key if isinstance(key, str) else key.decode("latin-1")
+        if key_name != "pipeline":
+            queued += client.llen(key)
     unacked = client.hlen("unacked")
     return queued + unacked
 

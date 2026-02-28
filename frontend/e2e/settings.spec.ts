@@ -9,10 +9,10 @@ test.describe('Settings Page', () => {
 
   test('settings page renders tabs', async ({ page }) => {
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(500);
+    await expect(page).toHaveURL(/\/settings$/);
     // SettingsPage has tabbed navigation (Sources, Preferences, Schedule, About)
     const tabList = page.locator('[role="tablist"]');
-    await expect(tabList).toBeVisible();
+    await expect(tabList).toBeVisible({ timeout: 10000 });
     const tabs = page.locator('[role="tab"]');
     const count = await tabs.count();
     expect(count).toBeGreaterThanOrEqual(2);

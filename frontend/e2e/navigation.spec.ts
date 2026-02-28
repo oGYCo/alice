@@ -10,9 +10,10 @@ test.describe('Navigation', () => {
 
   test('can navigate from feed to settings via sidebar links', async ({ page }) => {
     await page.goto('/feed', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/feed$/);
     // Wait for sidebar links to appear (Zustand rehydration + render)
     const links = page.locator('a[href]');
-    await expect(links.first()).toBeVisible({ timeout: 5000 });
+    await expect(links.first()).toBeVisible({ timeout: 10000 });
     const count = await links.count();
     expect(count).toBeGreaterThan(0);
   });

@@ -12,7 +12,7 @@ import { test as base } from '@playwright/test';
  * `expect` from this module instead of `@playwright/test`.
  */
 export const test = base.extend({
-  page: async ({ page, context }, use) => {
+  page: async ({ page, context }, runWithPage) => {
     // Cookie for the server-side middleware
     await context.addCookies([
       {
@@ -22,11 +22,11 @@ export const test = base.extend({
       },
     ]);
 
-    // Visit a public route first so we can seed localStorage *before*
-    // any authenticated page tries to read it via Zustand persist.
-    await page.goto('/login', { waitUntil: 'commit' });
-    await page.evaluate(() => {
-      localStorage.setItem(
+    // Seed localStorage before any application script executes.
+    // This avoids timing races where AuthGuard reads the default
+    // unauthenticated state and redirects to /login on slower machines.
+    await context.addInitScript(() => {
+      window.localStorage.setItem(
         'alice-auth',
         JSON.stringify({
           state: { apiKey: 'test-api-key', isAuthenticated: true },
@@ -35,7 +35,7 @@ export const test = base.extend({
       );
     });
 
-    await use(page);
+    await runWithPage(page);
   },
 });
 

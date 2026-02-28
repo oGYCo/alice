@@ -400,6 +400,13 @@ async def delete_kg_edge(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid edge_id format. Expected 'source::RELATION::target'")
 
+    # Validate relation type against whitelist to prevent Cypher injection
+    if relation not in _VALID_REL_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid relation type '{relation}'. Valid: {sorted(_VALID_REL_TYPES)}"
+        )
+
     try:
         client = await _get_client()
         cypher = (

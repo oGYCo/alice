@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     # Telegram Bot
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_WEBHOOK_HOST: str = ""
+    TELEGRAM_WEBHOOK_SECRET: str = ""
 
     # Logging
     LOG_LEVEL: str = "INFO"

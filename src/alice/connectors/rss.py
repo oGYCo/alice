@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from time import struct_time
 from typing import Protocol, TypedDict, cast
@@ -80,7 +81,7 @@ class RSSConnector(BaseConnector):
     async def fetch(self, config: SourceConfigSchema) -> list[RawContentSchema]:
         config_map = cast(dict[str, object], config.config)
         request_headers = self._build_request_headers(config_map.get("headers"))
-        feed_xml = self._fetch_feed(config.url, request_headers)
+        feed_xml = await self._fetch_feed(config.url, request_headers)
         parsed = self._parse_feed(feed_xml)
         fetched_at = datetime.now(UTC)
 
@@ -100,7 +101,7 @@ class RSSConnector(BaseConnector):
             seen_urls.add(normalized_url)
 
             summary = self._get_entry_summary(entry)
-            full_text, error = self._extract_full_text(normalized_url)
+            full_text, error = await self._extract_full_text(normalized_url)
 
             extraction_failed = full_text is None
             if extraction_failed:
@@ -142,16 +143,18 @@ class RSSConnector(BaseConnector):
                     headers[key] = value
         return headers
 
-    def _fetch_feed(self, url: str, headers: dict[str, str] | None = None) -> str:
+    async def _fetch_feed(self, url: str, headers: dict[str, str] | None = None) -> str:
         request_headers = headers or self._default_headers
         try:
-            response = httpx.get(
-                url,
+            async with httpx.AsyncClient(
                 timeout=20.0,
-                headers=request_headers,
                 follow_redirects=True,
-            )
-            _ = response.raise_for_status()
+            ) as client:
+                response = await client.get(
+                    url,
+                    headers=request_headers,
+                )
+                _ = response.raise_for_status()
         except httpx.HTTPError as exc:
             logger.error(
                 "rss_fetch_failed",
@@ -162,12 +165,12 @@ class RSSConnector(BaseConnector):
             raise
         return response.text
 
-    def _extract_full_text(self, url: str) -> tuple[str | None, str | None]:
+    async def _extract_full_text(self, url: str) -> tuple[str | None, str | None]:
         try:
-            html = trafilatura.fetch_url(url)
+            html = await asyncio.to_thread(trafilatura.fetch_url, url)
             if not html:
                 return None, "empty_html"
-            extracted = trafilatura.extract(html)
+            extracted = await asyncio.to_thread(trafilatura.extract, html)
             if not extracted:
                 return None, "no_extracted_text"
             return extracted.strip(), None

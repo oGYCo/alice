@@ -3,6 +3,7 @@ import { Inter, Source_Serif_4 } from 'next/font/google';
 import './globals.css';
 import { ConditionalSidebar } from '@/components/layout/ConditionalSidebar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
+import { Toaster } from '@/components/ui/sonner';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </AuthGuard>
         </main>
+        <Toaster />
       </body>
     </html>
   );

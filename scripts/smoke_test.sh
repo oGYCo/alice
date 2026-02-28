@@ -5,8 +5,7 @@ set -euo pipefail
 # This script validates that all services are running and responding to basic requests
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-API_URL="http://localhost:8000"
-MAX_RETRIES=30
+API_URL="http://localhost:8000"API_KEY="${ALICE_API_KEY:-alicesecret}"MAX_RETRIES=30
 RETRY_DELAY=2
 
 echo "=== Alice AI Secretary Smoke Test ==="
@@ -72,6 +71,7 @@ echo "   ✓ Alembic migrations applied"
 echo "5. Adding RSS source..."
 SOURCE_RESPONSE=$(curl -sf -X POST "${API_URL}/api/v1/sources" \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
   -d '{
     "name": "Example Feed",
     "url": "http://example.com",
@@ -97,6 +97,7 @@ echo "   ✓ RSS source added (ID: $SOURCE_ID)"
 echo "6. Triggering RSS fetch..."
 FETCH_RESPONSE=$(curl -sf -X POST "${API_URL}/api/v1/connectors/rss/fetch" \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: ${API_KEY}" \
   -d '{
     "feed_url": "http://example.com",
     "limit": 10
@@ -110,7 +111,7 @@ sleep 30
 
 # 8. Check for content
 echo "8. Checking for fetched content..."
-CONTENT_RESPONSE=$(curl -sf "${API_URL}/api/v1/content?limit=10")
+CONTENT_RESPONSE=$(curl -sf -H "X-API-Key: ${API_KEY}" "${API_URL}/api/v1/content?limit=10")
 CONTENT_COUNT=$(echo "$CONTENT_RESPONSE" | grep -o '"id"' | wc -l || true)
 
 if [ "$CONTENT_COUNT" -gt 0 ]; then

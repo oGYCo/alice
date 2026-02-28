@@ -24,7 +24,7 @@ from alice.services.matching import MatchingService
 from alice.services.push_scheduler import PushScheduler
 from alice.services.ranking import RankingService
 from alice.services.search import SearchService
-from alice.services.user_state import UserStateManager
+from alice.services.user_state import get_user_state_manager
 
 logger = structlog.get_logger(__name__)
 
@@ -141,7 +141,7 @@ class PushService:
         ranking_svc = RankingService()
 
         # Apply user-mode push modifiers (daily/project/explore/low_energy)
-        user_state_mgr = UserStateManager()
+        user_state_mgr = get_user_state_manager()
         push_mods = user_state_mgr.get_push_modifiers(user_id)
 
         scored: list[tuple[Content, float]] = []

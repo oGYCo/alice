@@ -55,7 +55,12 @@ def create_app() -> web.Application:
 
     # Build aiohttp app and register webhook handler
     app = web.Application()
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+
+    # Use secret_token for webhook signature verification when configured
+    webhook_secret = settings.TELEGRAM_WEBHOOK_SECRET or None
+    SimpleRequestHandler(
+        dispatcher=dp, bot=bot, secret_token=webhook_secret
+    ).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
 
     # Auto-register webhook with Telegram on startup when TELEGRAM_WEBHOOK_HOST is set
@@ -63,7 +68,10 @@ def create_app() -> web.Application:
         webhook_host = settings.TELEGRAM_WEBHOOK_HOST.rstrip("/")
         if webhook_host:
             webhook_url = f"{webhook_host}{WEBHOOK_PATH}"
-            await bot.set_webhook(webhook_url, drop_pending_updates=False)
+            webhook_kwargs: dict[str, object] = {"drop_pending_updates": False}
+            if settings.TELEGRAM_WEBHOOK_SECRET:
+                webhook_kwargs["secret_token"] = settings.TELEGRAM_WEBHOOK_SECRET
+            await bot.set_webhook(webhook_url, **webhook_kwargs)  # type: ignore[arg-type]
             logger.info("Webhook registered: %s", webhook_url)
         else:
             logger.warning("TELEGRAM_WEBHOOK_HOST not set — webhook not registered")

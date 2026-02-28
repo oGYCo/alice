@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Protocol, cast
 
 import structlog
 
 from alice.graph.client import GraphClient
-from alice.graph.schema import NodeLabel
+from alice.graph.schema import NodeLabel, RelType
 
 
 class _Logger(Protocol):
@@ -21,8 +22,55 @@ logger = cast(_Logger, structlog.get_logger(__name__))
 class GraphRepository:
     """CRUD layer for the Alice knowledge graph."""
 
+    # Valid identifiers for Neo4j labels / relationship types (alphanumeric + underscore)
+    _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+    # Allowed node labels
+    _VALID_LABELS: set[str] = {
+        NodeLabel.CONCEPT,
+        NodeLabel.METHOD,
+        NodeLabel.TOOL,
+        NodeLabel.THEORY,
+        NodeLabel.USER,
+        NodeLabel.CONTENT,
+    }
+
+    # Allowed relationship types
+    _VALID_REL_TYPES: set[str] = {
+        RelType.KNOWS,
+        RelType.PREREQUISITE_OF,
+        RelType.EXTENDS,
+        RelType.APPLIES_TO,
+        RelType.DISCUSSES,
+        RelType.CONTRASTS,
+    }
+
     def __init__(self, client: GraphClient) -> None:
         self._client = client
+
+    @classmethod
+    def _validate_identifier(cls, value: str, kind: str) -> None:
+        """Validate that *value* is a safe Neo4j identifier to prevent Cypher injection."""
+        if not cls._IDENTIFIER_RE.match(value):
+            raise ValueError(
+                f"Invalid {kind}: {value!r}. Must match [A-Za-z_][A-Za-z0-9_]*."
+            )
+
+    @classmethod
+    def _validate_label(cls, label: str) -> None:
+        """Ensure *label* is in the allowed set of node labels."""
+        if label not in cls._VALID_LABELS:
+            raise ValueError(
+                f"Invalid node label: {label!r}. Allowed: {sorted(cls._VALID_LABELS)}"
+            )
+
+    @classmethod
+    def _validate_rel_type(cls, rel_type: str) -> None:
+        """Ensure *rel_type* is in the allowed set of relationship types."""
+        if rel_type not in cls._VALID_REL_TYPES:
+            raise ValueError(
+                f"Invalid relationship type: {rel_type!r}. Allowed: {sorted(cls._VALID_REL_TYPES)}"
+            )
 
     async def upsert_concept(
         self,
@@ -31,6 +79,7 @@ class GraphRepository:
         aliases: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create or update a concept node. English canonical name required."""
+        self._validate_label(label)
         cypher = f"MERGE (c:{label} {{name: $name}}) SET c.aliases = $aliases RETURN c"
         rows = await self._client.execute_query(cypher, {"name": name, "aliases": aliases or []})
         logger.info("concept_upserted", name=name, label=label)
@@ -46,6 +95,9 @@ class GraphRepository:
         properties: dict[str, Any] | None = None,
     ) -> None:
         """Create a relationship between two nodes (MERGE — idempotent)."""
+        self._validate_label(from_label)
+        self._validate_label(to_label)
+        self._validate_rel_type(rel_type)
         cypher = (
             f"MATCH (a:{from_label} {{name: $from_name}}) "
             f"MATCH (b:{to_label} {{name: $to_name}}) "

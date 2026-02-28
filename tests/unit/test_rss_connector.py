@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest  # type: ignore
 
@@ -23,8 +23,8 @@ async def test_rss_connector_fetch_dedupes_and_normalizes_urls(
 ) -> None:
     connector = RSSConnector()
     feed_xml = fixtures_dir().joinpath("sample_hn.xml").read_text()
-    monkeypatch.setattr(connector, "_fetch_feed", lambda _url, _headers=None: feed_xml)
-    monkeypatch.setattr(connector, "_extract_full_text", lambda _url: ("Full text", None))
+    monkeypatch.setattr(connector, "_fetch_feed", AsyncMock(return_value=feed_xml))
+    monkeypatch.setattr(connector, "_extract_full_text", AsyncMock(return_value=("Full text", None)))
 
     config = SourceConfigSchema(name="HN", url="https://hnrss.org/frontpage", type="rss")
     results = await connector.fetch(config)
@@ -43,8 +43,8 @@ async def test_rss_connector_fetch_dedupes_and_normalizes_urls(
 async def test_rss_connector_falls_back_to_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     connector = RSSConnector()
     feed_xml = fixtures_dir().joinpath("sample_tech.xml").read_text()
-    monkeypatch.setattr(connector, "_fetch_feed", lambda _url, _headers=None: feed_xml)
-    monkeypatch.setattr(connector, "_extract_full_text", lambda _url: (None, "blocked"))
+    monkeypatch.setattr(connector, "_fetch_feed", AsyncMock(return_value=feed_xml))
+    monkeypatch.setattr(connector, "_extract_full_text", AsyncMock(return_value=(None, "blocked")))
 
     config = SourceConfigSchema(name="Tech", url="https://example.org/feed", type="rss")
     results = await connector.fetch(config)
@@ -62,8 +62,8 @@ async def test_rss_connector_falls_back_to_summary(monkeypatch: pytest.MonkeyPat
 async def test_rss_connector_skips_entries_without_links(monkeypatch: pytest.MonkeyPatch) -> None:
     connector = RSSConnector()
     feed_xml = fixtures_dir().joinpath("sample_tech.xml").read_text()
-    monkeypatch.setattr(connector, "_fetch_feed", lambda _url, _headers=None: feed_xml)
-    monkeypatch.setattr(connector, "_extract_full_text", lambda _url: ("Body", None))
+    monkeypatch.setattr(connector, "_fetch_feed", AsyncMock(return_value=feed_xml))
+    monkeypatch.setattr(connector, "_extract_full_text", AsyncMock(return_value=("Body", None)))
 
     config = SourceConfigSchema(name="Tech", url="https://example.org/feed", type="rss")
     results = await connector.fetch(config)
@@ -72,7 +72,7 @@ async def test_rss_connector_skips_entries_without_links(monkeypatch: pytest.Mon
     assert results[0].source_url == "https://example.org/atom-entry"
 
 
-def test_rss_connector_fetch_feed_uses_default_headers(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_rss_connector_fetch_feed_uses_default_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     connector = RSSConnector()
 
     response = MagicMock()
@@ -81,14 +81,24 @@ def test_rss_connector_fetch_feed_uses_default_headers(monkeypatch: pytest.Monke
 
     calls: dict[str, object] = {}
 
-    def fake_get(url: str, **kwargs):
-        calls["url"] = url
-        calls["kwargs"] = kwargs
-        return response
+    class FakeAsyncClient:
+        def __init__(self, **kwargs):
+            calls["client_kwargs"] = kwargs
 
-    monkeypatch.setattr(_rss_module.httpx, "get", fake_get)
+        async def __aenter__(self):
+            return self
 
-    out = connector._fetch_feed("https://example.com/feed.xml")
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url: str, **kwargs):
+            calls["url"] = url
+            calls["kwargs"] = kwargs
+            return response
+
+    monkeypatch.setattr(_rss_module.httpx, "AsyncClient", FakeAsyncClient)
+
+    out = await connector._fetch_feed("https://example.com/feed.xml")
 
     assert out == "<rss></rss>"
     assert calls["url"] == "https://example.com/feed.xml"
@@ -97,4 +107,5 @@ def test_rss_connector_fetch_feed_uses_default_headers(monkeypatch: pytest.Monke
     headers = kwargs.get("headers")
     assert isinstance(headers, dict)
     assert "User-Agent" in headers
-    assert kwargs.get("follow_redirects") is True
+    client_kwargs = calls["client_kwargs"]
+    assert client_kwargs.get("follow_redirects") is True

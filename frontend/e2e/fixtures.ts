@@ -18,13 +18,14 @@ export const test = base.extend({
       {
         name: 'alice-api-key',
         value: 'test-api-key',
-        domain: 'localhost',
-        path: '/',
+        url: 'http://localhost:3000',
       },
     ]);
 
-    // localStorage for client-side Zustand rehydration
-    await page.addInitScript(() => {
+    // Visit a public route first so we can seed localStorage *before*
+    // any authenticated page tries to read it via Zustand persist.
+    await page.goto('/login', { waitUntil: 'commit' });
+    await page.evaluate(() => {
       localStorage.setItem(
         'alice-auth',
         JSON.stringify({

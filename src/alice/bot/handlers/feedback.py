@@ -83,16 +83,22 @@ async def _handle_feedback_callback(
     user_id = query.from_user.id
 
     async with session_factory() as session:
-        # Ensure user exists (Telegram ID = users.id = users.telegram_chat_id)
-        result = await session.execute(select(User).where(User.id == user_id))
-        if result.scalar_one_or_none() is None:
+        # Look up user by telegram_chat_id (the stable Telegram identifier).
+        # Existing users may have a different auto-incremented users.id.
+        result = await session.execute(
+            select(User).where(User.telegram_chat_id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
             user = User(id=user_id, telegram_chat_id=user_id, preferences={})
             session.add(user)
             await session.flush()
 
+        db_user_id = user.id
+
         feedback = Feedback(
             content_id=content_id,
-            user_id=user_id,
+            user_id=db_user_id,
             type=feedback_type,
         )
         session.add(feedback)
@@ -104,18 +110,18 @@ async def _handle_feedback_callback(
                 from alice.services.review_service import ReviewCardService  # noqa: PLC0415
 
                 svc = ReviewCardService(session)
-                await svc.create_cards_from_content(user_id, content_id)
+                await svc.create_cards_from_content(db_user_id, content_id)
                 await session.commit()
             except Exception:
                 logger.warning(
                     "review_card_creation_failed: user=%d content=%d",
-                    user_id,
+                    db_user_id,
                     content_id,
                     exc_info=True,
                 )
 
     logger.info(
-        "Feedback stored: user=%d content=%d type=%s",
+        "Feedback stored: telegram_user=%d content=%d type=%s",
         user_id,
         content_id,
         feedback_type,

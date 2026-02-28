@@ -18,8 +18,11 @@ def _make_session_cm():
     session.commit = AsyncMock()  # commit is awaited
     session.flush = AsyncMock()   # flush is awaited
     # execute returns an awaitable whose result has .scalar_one_or_none()
+    # Return a user-like object with .id matching the default test user_id
+    fake_user = MagicMock()
+    fake_user.id = 123  # matches _make_query default user_id
     exec_result = MagicMock()
-    exec_result.scalar_one_or_none.return_value = True  # pretend user exists
+    exec_result.scalar_one_or_none.return_value = fake_user
     session.execute = AsyncMock(return_value=exec_result)
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=session)
@@ -90,13 +93,14 @@ async def test_feedback_stored_to_db():
     with patch("alice.bot.handlers.feedback.AsyncSessionLocal", return_value=cm):
         await handle_feedback_callback(query, bot)
 
-    # session.add was called with a Feedback object
-    session.add.assert_called_once()
-    feedback_obj = session.add.call_args.args[0]
+    # session.add was called with a Feedback object (may also add review cards)
+    assert session.add.call_count >= 1
+    feedback_obj = session.add.call_args_list[0].args[0]
     assert feedback_obj.content_id == 42
     assert feedback_obj.user_id == 123
     assert feedback_obj.type == FeedbackType.valuable_learned
-    session.commit.assert_called_once()
+    # commit called at least once for feedback, possibly again for review cards
+    assert session.commit.call_count >= 1
 
 
 async def test_feedback_stored_save_for_later():

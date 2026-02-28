@@ -19,7 +19,7 @@ from alice.bot.handlers.feedback import (
     handle_feedback_callback_with_session_factory,
     parse_callback_data,
 )
-from alice.models.base import Base
+from alice.models import Base
 from alice.models.feedback import Feedback, FeedbackType
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]

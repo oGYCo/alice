@@ -30,7 +30,7 @@ from alice.graph.repository import GraphRepository
 from alice.graph.user_kg import UserKnowledgeGraph
 from alice.llm.factory import create_llm_client
 from alice.llm.protocol import LLMClient
-from alice.models.base import Base
+from alice.models import Base
 from alice.models.content import Content, PipelineStatus
 from alice.models.user import User
 from alice.services.kg_updater import KGUpdater

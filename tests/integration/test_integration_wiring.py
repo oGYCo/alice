@@ -28,7 +28,7 @@ from alice.graph.client import GraphClient
 from alice.graph.extractor import ContentSubgraph, ContentSubgraphNode
 from alice.graph.repository import GraphRepository
 from alice.graph.user_kg import UserKnowledgeGraph
-from alice.models.base import Base
+from alice.models import Base
 from alice.models.content import Content, PipelineStatus
 from alice.models.user import User
 from alice.services.matching import MatchingService

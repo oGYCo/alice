@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from alice.config import settings
 from alice.db import get_db
 from alice.main import create_app
-from alice.models.base import Base
+from alice.models import Base
 from alice.services.source_service import SourceService
 from alice.worker.celery_app import celery_app
 

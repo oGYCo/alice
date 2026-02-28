@@ -16,7 +16,7 @@ import redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from alice.config import settings
-from alice.models.base import Base
+from alice.models import Base
 from alice.models.content import Content, PipelineStatus
 from alice.pipeline.orchestrator import PipelineOrchestrator
 from alice.schemas.content import RawContentSchema

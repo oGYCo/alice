@@ -14,7 +14,7 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from alice.models.base import Base
+from alice.models import Base
 from alice.models.content import PipelineStatus
 from alice.schemas.content import RawContentSchema
 from alice.schemas.source import SourceConfigSchema

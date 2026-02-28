@@ -3,14 +3,13 @@
 import warnings
 from unittest.mock import patch
 
+import alice.pipeline.tasks as _pipeline_tasks  # noqa: F401 — force registration
 from alice.worker.celery_app import celery_app
 from alice.worker.tasks import (
     task_fetch_all_sources,
     task_push_batch,
     task_run_gatekeeper,
 )
-
-import alice.pipeline.tasks as _pipeline_tasks  # noqa: F401 — force registration
 
 
 def test_celery_app_created():

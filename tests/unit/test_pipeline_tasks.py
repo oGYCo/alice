@@ -13,7 +13,6 @@ from alice.pipeline.tasks import (
     task_run_indexing,
     task_run_scoring,
     task_run_understanding,
-    task_retry_failed_graph_extractions,
 )
 
 # ---------------------------------------------------------------------------

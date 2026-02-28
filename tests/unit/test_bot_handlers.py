@@ -1,12 +1,9 @@
 """Tests for Telegram bot message formatting, command handlers, and callbacks."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from alice.bot.handlers.commands import (
-    MODE_NAMES,
     handle_focus,
     handle_help,
     handle_mode,
@@ -672,7 +669,7 @@ async def test_review_callback_records_rating(mock_session_local):
     mock_session_local.return_value.__aexit__ = AsyncMock(return_value=False)
 
     fake_card = MagicMock()
-    fake_card.due_date = datetime(2026, 3, 5, tzinfo=timezone.utc)
+    fake_card.due_date = datetime(2026, 3, 5, tzinfo=UTC)
 
     with patch("alice.bot.handlers.review.ReviewCardService") as mock_cls:
         mock_svc = AsyncMock()

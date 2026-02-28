@@ -71,7 +71,7 @@ async def db_seed(engine):
     user_ids = [1, 100001, 100002, 100003, 100004, 100005]
 
     async with engine.begin() as conn:
-        await conn.execute(text("SELECT setval('users_id_seq', 1, false)"))
+        # Seed users with forced IDs (no sequence — users.id is BigInteger without autoincrement)
         for uid in user_ids:
             await conn.execute(
                 text(
@@ -81,7 +81,6 @@ async def db_seed(engine):
                 ),
                 {"id": uid, "chat_id": uid + 900000},
             )
-        await conn.execute(text("SELECT setval('users_id_seq', 200000, true)"))
     yield
     async with engine.begin() as conn:
         # Delete child tables first (FK depends on users), then users

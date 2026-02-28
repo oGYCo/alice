@@ -59,13 +59,13 @@ async def db_seed(engine):
 
     from sqlalchemy import text
 
-    content_ids = [123, 200, 456, 500, 600, 601, 700]
+    content_ids = [123, 200, 456, 500, 600, 601, 700, 800]
     # These are the Telegram user IDs used in tests, stored as users.id via handler
-    user_ids = [999, 888, 111, 222, 1001, 1002, 2000, 3000]
+    # 8525528828 is a real Telegram ID that exceeds int32 max (2,147,483,647)
+    user_ids = [999, 888, 111, 222, 1001, 1002, 2000, 3000, 8525528828]
 
     async with engine.begin() as conn:
-        # Seed users with forced IDs
-        await conn.execute(text("SELECT setval('users_id_seq', 100, false)"))
+        # Seed users with forced IDs (no sequence needed — users.id is BigInteger without autoincrement)
         for uid in user_ids:
             await conn.execute(
                 text(
@@ -75,7 +75,6 @@ async def db_seed(engine):
                 ),
                 {"id": uid, "chat_id": uid * 10},  # unique chat_id != id
             )
-        await conn.execute(text("SELECT setval('users_id_seq', 10000, true)"))
 
         # Seed content rows with forced IDs
         await conn.execute(text("SELECT setval('content_id_seq', 100, false)"))
@@ -407,3 +406,34 @@ async def test_feedback_timestamps_set_automatically(session, feedback_session_f
     assert feedback.created_at is not None
     assert feedback.updated_at is not None
     assert feedback.created_at == feedback.updated_at
+
+
+async def test_handle_feedback_callback_bigint_user_id(session, feedback_session_factory):
+    """handle_feedback_callback works with Telegram user IDs exceeding int32 max.
+
+    Telegram user IDs can exceed 2,147,483,647 (int32 max). This test uses a
+    real-world Telegram ID (8525528828) to verify the BigInteger column handles
+    it correctly end-to-end against a real PostgreSQL database.
+    """
+    big_user_id = 8525528828  # exceeds int32 max (2_147_483_647)
+    query = _make_query(data="feedback:not_valuable:800", user_id=big_user_id)
+
+    bot = _BotStub()
+    await handle_feedback_callback_with_session_factory(
+        query,
+        bot,
+        session_factory=feedback_session_factory,
+    )
+
+    # Verify Feedback was stored with correct bigint user_id
+    stmt = select(Feedback).where(
+        Feedback.content_id == 800,
+        Feedback.user_id == big_user_id,
+    )
+    result = await session.execute(stmt)
+    feedback = result.scalar_one_or_none()
+
+    assert feedback is not None, "Feedback not stored for bigint user_id"
+    assert feedback.user_id == big_user_id
+    assert feedback.content_id == 800
+    assert feedback.type == FeedbackType.not_valuable

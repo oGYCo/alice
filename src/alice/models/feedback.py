@@ -2,7 +2,7 @@
 
 from enum import StrEnum
 
-from sqlalchemy import Enum, ForeignKey, Integer
+from sqlalchemy import BigInteger, Enum, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, TimestampMixin
@@ -24,7 +24,7 @@ class Feedback(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     content_id: Mapped[int] = mapped_column(Integer, ForeignKey("content.id"), nullable=False)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     type: Mapped[FeedbackType] = mapped_column(
         Enum(FeedbackType, name="feedbacktype"), nullable=False
     )

@@ -12,6 +12,7 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy import func, select
 
+from alice.bot.i18n import set_user_language, t
 from alice.config import settings
 from alice.db import AsyncSessionLocal
 from alice.models.content import Content, PipelineStatus
@@ -57,6 +58,14 @@ def _parse_args(message: Message) -> str | None:
 # Mode display constants (shared with mode callback handler in main.py)
 # ---------------------------------------------------------------------------
 
+_MODE_I18N_KEYS: dict[UserMode, str] = {
+    UserMode.daily: "daily",
+    UserMode.project: "project",
+    UserMode.explore: "explore",
+    UserMode.low_energy: "low_energy",
+}
+
+# Legacy dicts kept for backward compatibility (Chinese only)
 MODE_NAMES: dict[UserMode, str] = {
     UserMode.daily: "📋 日常模式",
     UserMode.project: "🎯 项目模式",
@@ -71,52 +80,21 @@ MODE_DESCRIPTIONS: dict[UserMode, str] = {
     UserMode.low_energy: "仅推送轻量内容",
 }
 
+
+def get_mode_name(mode: UserMode, lang: str = "zh") -> str:
+    """Return localised display name for a mode."""
+    key = _MODE_I18N_KEYS.get(mode, "daily")
+    return t(f"mode_{key}", lang)
+
+
+def get_mode_desc(mode: UserMode, lang: str = "zh") -> str:
+    """Return localised description for a mode."""
+    key = _MODE_I18N_KEYS.get(mode, "daily")
+    return t(f"mode_desc_{key}", lang)
+
 # ---------------------------------------------------------------------------
-# Static text
+# Static text (now served via i18n)
 # ---------------------------------------------------------------------------
-
-_HELP_TEXT = """
-🤖 *Alice — 智能信息秘书*
-
-*信息推送：*
-/push — 主动获取推送（不等定时推送）
-/search `关键词` — 搜索已处理的内容
-
-*知识管理：*
-/review — 查看待复习的知识卡片
-/focus `主题` — 设置当前关注主题
-
-*系统管理：*
-/sources — 查看内容源列表
-/mode — 查看或切换推送模式
-/stats — 查看系统数据统计
-
-*其他：*
-/start — 开始使用
-/help — 查看命令列表
-/status — 系统运行状态
-/settings — 查看当前设置
-
-*反馈按钮：*
-👍高质量 · ⏰稍后再看 · 📖已知晓 · 👎无价值
-❓解释概念 · 💬追问
-""".strip()
-
-_START_TEXT = """
-👋 你好！我是 *Alice*，你的 AI 信息秘书。
-
-我会为你精选高质量的内容，并通过 Telegram 推送给你。每条推送都附有：
-• 📋 核心内容摘要
-• 🎯 推送原因
-• 📖 阅读建议
-
-你可以通过按钮反馈，帮助我更好地了解你的需求。
-
-*快速上手：*
-• /push 立即获取推送
-• /review 复习已学知识
-• /help 查看所有命令
-""".strip()
 
 
 # ---------------------------------------------------------------------------
@@ -125,9 +103,9 @@ _START_TEXT = """
 
 
 @router.message(Command("start"))
-async def handle_start(message: Message) -> None:
+async def handle_start(message: Message, lang: str = "zh") -> None:
     """Welcome message."""
-    await message.answer(_START_TEXT, parse_mode="Markdown")
+    await message.answer(t("start_text", lang), parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +114,9 @@ async def handle_start(message: Message) -> None:
 
 
 @router.message(Command("help"))
-async def handle_help(message: Message) -> None:
+async def handle_help(message: Message, lang: str = "zh") -> None:
     """List all available commands."""
-    await message.answer(_HELP_TEXT, parse_mode="Markdown")
+    await message.answer(t("help_text", lang), parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +125,7 @@ async def handle_help(message: Message) -> None:
 
 
 @router.message(Command("push"))
-async def handle_push(message: Message) -> None:
+async def handle_push(message: Message, lang: str = "zh") -> None:
     """Fetch and deliver the next batch of content to the user immediately."""
     user_id = message.from_user.id
     chat_id = message.chat.id
@@ -161,7 +139,7 @@ async def handle_push(message: Message) -> None:
         batch = await push_svc.get_next_push_batch(session, db_user_id, limit=3)
 
         if not batch:
-            await message.answer("📭 暂无新内容可推送。稍后再试或添加更多内容源。")
+            await message.answer(t("push_empty", lang))
             return
 
         await push_svc.deliver_push(
@@ -170,8 +148,9 @@ async def handle_push(message: Message) -> None:
             chat_id=chat_id,
             content_list=batch,
             session=session,
+            lang=lang,
         )
-        await message.answer(f"✅ 已推送 {len(batch)} 条内容。")
+        await message.answer(t("push_done", lang, count=len(batch)))
 
 
 # ---------------------------------------------------------------------------
@@ -180,22 +159,21 @@ async def handle_push(message: Message) -> None:
 
 
 @router.message(Command("sources"))
-async def handle_sources(message: Message) -> None:
+async def handle_sources(message: Message, lang: str = "zh") -> None:
     """List active content sources."""
     async with AsyncSessionLocal() as session:
         svc = SourceService(session)
         sources = await svc.list_active()
 
     if not sources:
-        await message.answer("📡 暂无活跃的内容源。请通过 Web 界面添加。")
+        await message.answer(t("sources_empty", lang))
         return
 
-    lines = ["📡 *活跃内容源*\n"]
+    lines = [t("sources_header", lang)]
     for s in sources:
-        last = s.last_fetched_at.strftime("%m-%d %H:%M") if s.last_fetched_at else "从未"
+        last = s.last_fetched_at.strftime("%m-%d %H:%M") if s.last_fetched_at else t("sources_never", lang)
         lines.append(
-            f"• *{s.name}* ({s.type})\n"
-            f"  间隔: {s.fetch_interval_minutes}分钟 | 上次抓取: {last}"
+            t("sources_item", lang, name=s.name, type=s.type, interval=s.fetch_interval_minutes, last=last)
         )
 
     await message.answer("\n".join(lines), parse_mode="Markdown")
@@ -207,7 +185,7 @@ async def handle_sources(message: Message) -> None:
 
 
 @router.message(Command("review"))
-async def handle_review(message: Message) -> None:
+async def handle_review(message: Message, lang: str = "zh") -> None:
     """Show due review cards with FSRS rating buttons."""
     user_id = message.from_user.id
 
@@ -217,10 +195,10 @@ async def handle_review(message: Message) -> None:
         cards = await svc.get_due_cards(user.id, limit=5)
 
     if not cards:
-        await message.answer("🎉 没有待复习的卡片，你已全部掌握！")
+        await message.answer(t("review_empty", lang))
         return
 
-    await message.answer(f"📚 你有 {len(cards)} 张待复习卡片：")
+    await message.answer(t("review_count", lang, count=len(cards)))
 
     for card in cards:
         text = f"💡 *{card.concept_id}*\n\n{card.review_prompt}"
@@ -228,19 +206,19 @@ async def handle_review(message: Message) -> None:
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="❌ 忘了",
+                        text=t("review_btn_again", lang),
                         callback_data=f"review:{card.id}:again",
                     ),
                     InlineKeyboardButton(
-                        text="😐 困难",
+                        text=t("review_btn_hard", lang),
                         callback_data=f"review:{card.id}:hard",
                     ),
                     InlineKeyboardButton(
-                        text="👍 记得",
+                        text=t("review_btn_good", lang),
                         callback_data=f"review:{card.id}:good",
                     ),
                     InlineKeyboardButton(
-                        text="⚡ 简单",
+                        text=t("review_btn_easy", lang),
                         callback_data=f"review:{card.id}:easy",
                     ),
                 ]
@@ -255,7 +233,7 @@ async def handle_review(message: Message) -> None:
 
 
 @router.message(Command("mode"))
-async def handle_mode(message: Message) -> None:
+async def handle_mode(message: Message, lang: str = "zh") -> None:
     """Show current mode or switch to a new one."""
     user_id = message.from_user.id
     mgr = get_user_state_manager()
@@ -264,16 +242,16 @@ async def handle_mode(message: Message) -> None:
     if not args:
         # Show current mode with switch buttons
         current = mgr.get_state(user_id)
-        name = MODE_NAMES.get(current, str(current))
-        desc = MODE_DESCRIPTIONS.get(current, "")
+        name = get_mode_name(current, lang)
+        desc = get_mode_desc(current, lang)
 
-        lines = [f"🔄 当前模式：{name}", f"_{desc}_\n"]
+        lines = [t("mode_current", lang, name=name), f"_{desc}_\n"]
         for mode in UserMode:
             marker = " →" if mode == current else "  "
-            lines.append(f"{marker} {MODE_NAMES[mode]} — {MODE_DESCRIPTIONS[mode]}")
+            lines.append(f"{marker} {get_mode_name(mode, lang)} — {get_mode_desc(mode, lang)}")
 
         keyboard_rows = [
-            [InlineKeyboardButton(text=MODE_NAMES[m], callback_data=f"mode:{m.value}")]
+            [InlineKeyboardButton(text=get_mode_name(m, lang), callback_data=f"mode:{m.value}")]
             for m in UserMode
             if m != current
         ]
@@ -287,12 +265,12 @@ async def handle_mode(message: Message) -> None:
         target = UserMode(target_str)
     except ValueError:
         valid = ", ".join(m.value for m in UserMode)
-        await message.answer(f"❌ 无效模式。可用值: {valid}")
+        await message.answer(t("mode_invalid", lang, valid=valid))
         return
 
     result = mgr.transition(user_id, target)
-    name = MODE_NAMES.get(result.new_mode, str(result.new_mode))
-    await message.answer(f"✅ 已切换到 {name}")
+    name = get_mode_name(result.new_mode, lang)
+    await message.answer(t("mode_switched", lang, name=name))
 
 
 # ---------------------------------------------------------------------------
@@ -301,14 +279,11 @@ async def handle_mode(message: Message) -> None:
 
 
 @router.message(Command("focus"))
-async def handle_focus(message: Message) -> None:
+async def handle_focus(message: Message, lang: str = "zh") -> None:
     """Set working-memory focus topic and switch to project mode."""
     topic = _parse_args(message)
     if not topic:
-        await message.answer(
-            "用法：/focus `主题名称`\n例如：/focus transformer架构优化",
-            parse_mode="Markdown",
-        )
+        await message.answer(t("focus_usage", lang), parse_mode="Markdown")
         return
 
     user_id = message.from_user.id
@@ -321,11 +296,7 @@ async def handle_focus(message: Message) -> None:
     mgr = get_user_state_manager()
     mgr.transition(user_id, UserMode.project, context={"focus_topic": topic})
 
-    await message.answer(
-        f"🎯 已设置关注主题：*{topic}*\n"
-        f"已自动切换到项目模式，后续推送将优先关联此主题。",
-        parse_mode="Markdown",
-    )
+    await message.answer(t("focus_set", lang, topic=topic), parse_mode="Markdown")
 
 
 # ---------------------------------------------------------------------------
@@ -334,14 +305,11 @@ async def handle_focus(message: Message) -> None:
 
 
 @router.message(Command("search"))
-async def handle_search(message: Message) -> None:
+async def handle_search(message: Message, lang: str = "zh") -> None:
     """Full-text search across indexed content via Meilisearch."""
     query = _parse_args(message)
     if not query:
-        await message.answer(
-            "用法：/search `关键词`\n例如：/search attention mechanism",
-            parse_mode="Markdown",
-        )
+        await message.answer(t("search_usage", lang), parse_mode="Markdown")
         return
 
     from alice.services.search import SearchService  # noqa: PLC0415
@@ -351,18 +319,18 @@ async def handle_search(message: Message) -> None:
         result = svc.search(query, limit=5)
     except Exception:
         logger.exception("search_failed query=%s", query)
-        await message.answer("❌ 搜索服务暂时不可用，请稍后重试。")
+        await message.answer(t("search_error", lang))
         return
 
     hits = result.get("hits", [])
     if not hits:
-        await message.answer(f"🔍 未找到与「{query}」相关的内容。")
+        await message.answer(t("search_empty", lang, query=query))
         return
 
     total = result.get("estimatedTotalHits", len(hits))
-    lines = [f"🔍 搜索「{query}」找到 {total} 条结果：\n"]
+    lines = [t("search_header", lang, query=query, total=total)]
     for hit in hits:
-        title = hit.get("title") or "(无标题)"
+        title = hit.get("title") or t("search_no_title", lang)
         summary = hit.get("summary") or ""
         url = hit.get("source_url") or ""
         preview = (summary[:80] + "…") if len(summary) > 80 else summary
@@ -377,7 +345,7 @@ async def handle_search(message: Message) -> None:
 
 
 @router.message(Command("stats"))
-async def handle_stats(message: Message) -> None:
+async def handle_stats(message: Message, lang: str = "zh") -> None:
     """Show real system statistics from the database."""
     async with AsyncSessionLocal() as session:
         # Content counts by pipeline status
@@ -406,30 +374,30 @@ async def handle_stats(message: Message) -> None:
         )
         feedback_count = feedback_result.scalar() or 0
 
-    _STATUS_LABELS = {
-        PipelineStatus.fetched: "已获取",
-        PipelineStatus.gatekept: "已筛选",
-        PipelineStatus.understood: "已理解",
-        PipelineStatus.scored: "已评分",
-        PipelineStatus.indexed: "已索引",
-        PipelineStatus.failed: "失败",
+    status_i18n: dict[PipelineStatus, str] = {
+        PipelineStatus.fetched: "status_fetched",
+        PipelineStatus.gatekept: "status_gatekept",
+        PipelineStatus.understood: "status_understood",
+        PipelineStatus.scored: "status_scored",
+        PipelineStatus.indexed: "status_indexed",
+        PipelineStatus.failed: "status_failed",
     }
 
     lines = [
-        "📊 *系统统计*\n",
-        f"📡 活跃源: {source_count}",
-        f"📄 总内容: {total}",
+        t("stats_header", lang),
+        t("stats_active_sources", lang, count=source_count),
+        t("stats_total_content", lang, count=total),
     ]
 
     for status in PipelineStatus:
         count = status_counts.get(status, 0)
         if count > 0:
-            label = _STATUS_LABELS.get(status, status)
+            label = t(status_i18n.get(status, "status_fetched"), lang)
             lines.append(f"  • {label}: {count}")
 
     lines.extend([
-        f"\n📤 已推送: {pushed}",
-        f"💬 反馈数: {feedback_count}",
+        t("stats_pushed", lang, count=pushed),
+        t("stats_feedback", lang, count=feedback_count),
     ])
 
     await message.answer("\n".join(lines), parse_mode="Markdown")
@@ -441,18 +409,15 @@ async def handle_stats(message: Message) -> None:
 
 
 @router.message(Command("status"))
-async def handle_status(message: Message) -> None:
+async def handle_status(message: Message, lang: str = "zh") -> None:
     """Show system running status and current user mode."""
     user_id = message.from_user.id
     mgr = get_user_state_manager()
     mode = mgr.get_state(user_id)
-    mode_name = MODE_NAMES.get(mode, str(mode))
+    mode_name = get_mode_name(mode, lang)
 
     await message.answer(
-        f"✅ *系统状态*\n\n"
-        f"Alice 运行正常\n"
-        f"当前模式: {mode_name}\n\n"
-        f"发送 /stats 查看详细数据统计",
+        t("system_status", lang, mode=mode_name),
         parse_mode="Markdown",
     )
 
@@ -463,7 +428,7 @@ async def handle_status(message: Message) -> None:
 
 
 @router.message(Command("settings"))
-async def handle_settings(message: Message) -> None:
+async def handle_settings(message: Message, lang: str = "zh") -> None:
     """Show current user settings and preferences."""
     user_id = message.from_user.id
     mgr = get_user_state_manager()
@@ -473,21 +438,53 @@ async def handle_settings(message: Message) -> None:
         user = await _ensure_user(session, user_id)
         prefs = user.preferences or {}
 
-    mode_name = MODE_NAMES.get(mode, str(mode))
+    from alice.bot.i18n import LANGUAGE_DISPLAY  # noqa: PLC0415
+
+    mode_name = get_mode_name(mode, lang)
+    lang_display = LANGUAGE_DISPLAY.get(lang, lang)
 
     lines = [
-        "⚙️ *当前设置*\n",
-        f"推送模式: {mode_name}",
-        f"用户 ID: {user_id}",
+        t("settings_header", lang),
+        t("settings_mode", lang, mode=mode_name),
+        t("settings_user_id", lang, user_id=user_id),
+        t("settings_language", lang, language=lang_display),
     ]
 
-    if prefs:
-        lines.append("\n*偏好设置:*")
-        for k, v in prefs.items():
-            lines.append(f"  • {k}: {v}")
+    display_prefs = {k: v for k, v in prefs.items() if k != "language"}
+    if display_prefs:
+        lines.append(t("settings_prefs_header", lang))
+        for k, v in display_prefs.items():
+            lines.append(t("settings_prefs_item", lang, key=k, value=v))
     else:
-        lines.append("\n_通过反馈按钮（👍👎⏰📖）训练个人偏好_")
+        lines.append(t("settings_no_prefs", lang))
 
-    lines.append("\n使用 /mode 切换模式 | /focus 设置关注主题")
+    lines.append(t("settings_footer", lang))
 
     await message.answer("\n".join(lines), parse_mode="Markdown")
+
+
+# ---------------------------------------------------------------------------
+# /lang — 切换语言 / Switch language
+# ---------------------------------------------------------------------------
+
+
+@router.message(Command("lang"))
+async def handle_lang(message: Message, lang: str = "zh") -> None:
+    """Show language selector or switch directly via argument."""
+    args = _parse_args(message)
+
+    if args and args.lower() in ("zh", "en", "中文", "english"):
+        target = "zh" if args.lower() in ("zh", "中文") else "en"
+        await set_user_language(message.from_user.id, target)
+        await message.answer(t("lang_switched", target))
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=t("lang_zh_btn", lang), callback_data="lang:zh"),
+                InlineKeyboardButton(text=t("lang_en_btn", lang), callback_data="lang:en"),
+            ]
+        ]
+    )
+    await message.answer(t("lang_current", lang), reply_markup=keyboard)

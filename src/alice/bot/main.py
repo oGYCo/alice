@@ -19,7 +19,8 @@ from aiohttp import web
 from alice.bot.handlers import commands
 from alice.bot.handlers import feedback as feedback_handler
 from alice.bot.handlers import review as review_handler
-from alice.bot.handlers.commands import MODE_NAMES
+from alice.bot.handlers.commands import get_mode_name
+from alice.bot.i18n import LanguageMiddleware, set_user_language, t
 from alice.config import settings
 from alice.services.user_state import UserMode, get_user_state_manager
 
@@ -41,43 +42,58 @@ def create_app() -> web.Application:
     # Register command handlers
     dp.include_router(commands.router)
 
+    # Register language middleware for all event types
+    dp.message.middleware(LanguageMiddleware())
+    dp.callback_query.middleware(LanguageMiddleware())
+
     # Register feedback callback handler (feedback:{type}:{id})
     @dp.callback_query(lambda q: q.data and q.data.startswith("feedback:"))
-    async def _feedback_cb(query: CallbackQuery) -> None:
-        await feedback_handler.handle_feedback_callback(query, bot)
+    async def _feedback_cb(query: CallbackQuery, lang: str = "zh") -> None:
+        await feedback_handler.handle_feedback_callback(query, bot, lang=lang)
 
     # Register explain_concept placeholder (explain:{id})
     @dp.callback_query(lambda q: q.data and q.data.startswith("explain:"))
-    async def _explain_cb(query: CallbackQuery) -> None:
-        await feedback_handler.handle_explain_concept(query, bot)
+    async def _explain_cb(query: CallbackQuery, lang: str = "zh") -> None:
+        await feedback_handler.handle_explain_concept(query, bot, lang=lang)
 
     # Register discuss placeholder (discuss:{id})
     @dp.callback_query(lambda q: q.data and q.data.startswith("discuss:"))
-    async def _discuss_cb(query: CallbackQuery) -> None:
-        await feedback_handler.handle_discuss(query, bot)
+    async def _discuss_cb(query: CallbackQuery, lang: str = "zh") -> None:
+        await feedback_handler.handle_discuss(query, bot, lang=lang)
 
     # Register review card rating callback (review:{card_id}:{rating})
     @dp.callback_query(lambda q: q.data and q.data.startswith("review:"))
-    async def _review_cb(query: CallbackQuery) -> None:
-        await review_handler.handle_review_callback(query, bot)
+    async def _review_cb(query: CallbackQuery, lang: str = "zh") -> None:
+        await review_handler.handle_review_callback(query, bot, lang=lang)
+
+    # Register language switch callback (lang:{code})
+    @dp.callback_query(lambda q: q.data and q.data.startswith("lang:"))
+    async def _lang_cb(query: CallbackQuery) -> None:
+        parts = (query.data or "").split(":")
+        if len(parts) != 2 or parts[1] not in ("zh", "en"):
+            await query.answer(text=t("invalid_operation"))
+            return
+        target_lang = parts[1]
+        await set_user_language(query.from_user.id, target_lang)
+        await query.answer(text=t("lang_switched", target_lang))
 
     # Register mode switch callback (mode:{mode_value})
     @dp.callback_query(lambda q: q.data and q.data.startswith("mode:"))
-    async def _mode_cb(query: CallbackQuery) -> None:
+    async def _mode_cb(query: CallbackQuery, lang: str = "zh") -> None:
         parts = (query.data or "").split(":")
         if len(parts) != 2:
-            await query.answer(text="无效操作。")
+            await query.answer(text=t("invalid_operation", lang))
             return
         try:
             target = UserMode(parts[1])
         except ValueError:
-            await query.answer(text="无效模式。")
+            await query.answer(text=t("invalid_mode", lang))
             return
         user_id = query.from_user.id
         mgr = get_user_state_manager()
         result = mgr.transition(user_id, target)
-        name = MODE_NAMES.get(result.new_mode, str(result.new_mode))
-        await query.answer(text=f"✅ 已切换到 {name}")
+        name = get_mode_name(result.new_mode, lang)
+        await query.answer(text=t("mode_switched", lang, name=name))
 
     # Build aiohttp app and register webhook handler
     app = web.Application()

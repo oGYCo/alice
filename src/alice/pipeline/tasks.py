@@ -734,12 +734,19 @@ def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5, content_ty
 
             try:
                 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+
+                # Resolve user language preference for localised push cards
+                from alice.bot.i18n import get_user_language  # noqa: PLC0415
+
+                user_lang = await get_user_language(chat_id)
+
                 await svc.deliver_push(
                     bot=bot,
                     user_id=user_id,
                     chat_id=chat_id,
                     content_list=content_list,
                     session=session,
+                    lang=user_lang,
                 )
             except Exception as exc:
                 logger.error(

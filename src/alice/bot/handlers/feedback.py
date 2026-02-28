@@ -8,6 +8,7 @@ from aiogram import Bot
 from aiogram.types import CallbackQuery
 from sqlalchemy import select
 
+from alice.bot.i18n import t
 from alice.db import AsyncSessionLocal
 from alice.models.feedback import Feedback
 from alice.models.user import User
@@ -23,12 +24,12 @@ _FEEDBACK_TYPE_MAP: dict[str, FeedbackType] = {
     FeedbackType.already_known: FeedbackType.already_known,
 }
 
-# Human-readable confirmation messages per feedback type
-_FEEDBACK_MESSAGES: dict[FeedbackType, str] = {
-    FeedbackType.valuable_learned: "✅ 已记录！知识图谱已更新。",
-    FeedbackType.save_for_later: "⏰ 已放入待阅读队列，稍后再看。",
-    FeedbackType.not_valuable: "👎 已记录，将优化后续推送。",
-    FeedbackType.already_known: "📖 了解了！已记录你的知识状态。",
+# Human-readable confirmation messages per feedback type (i18n keys)
+_FEEDBACK_I18N_KEYS: dict[FeedbackType, str] = {
+    FeedbackType.valuable_learned: "feedback_valuable",
+    FeedbackType.save_for_later: "feedback_later",
+    FeedbackType.not_valuable: "feedback_not_valuable",
+    FeedbackType.already_known: "feedback_known",
 }
 
 
@@ -54,19 +55,20 @@ def parse_callback_data(data: str) -> tuple[FeedbackType, int]:
     return _FEEDBACK_TYPE_MAP[type_str], content_id
 
 
-async def handle_feedback_callback(query: CallbackQuery, bot: Bot) -> None:
+async def handle_feedback_callback(query: CallbackQuery, bot: Bot, *, lang: str = "zh") -> None:
     """Handle inline keyboard feedback callback.
 
     Parses callback data, stores Feedback record to DB, answers query.
     """
     del bot  # reserved for future bot-side follow-up actions
-    await _handle_feedback_callback(query, session_factory=AsyncSessionLocal)
+    await _handle_feedback_callback(query, session_factory=AsyncSessionLocal, lang=lang)
 
 
 async def _handle_feedback_callback(
     query: CallbackQuery,
     *,
     session_factory: Callable[[], Any],
+    lang: str = "zh",
 ) -> None:
     """Internal feedback handler with injectable DB session factory.
 
@@ -77,7 +79,7 @@ async def _handle_feedback_callback(
         feedback_type, content_id = parse_callback_data(query.data)
     except ValueError:
         logger.warning("Invalid feedback callback data: %s", query.data)
-        await query.answer(text="无效的反馈数据。")
+        await query.answer(text=t("feedback_invalid", lang))
         return
 
     user_id = query.from_user.id
@@ -127,8 +129,8 @@ async def _handle_feedback_callback(
         feedback_type,
     )
 
-    confirmation = _FEEDBACK_MESSAGES.get(feedback_type, "✅ 已记录！")
-    await query.answer(text=confirmation)
+    confirmation_key = _FEEDBACK_I18N_KEYS.get(feedback_type, "feedback_recorded")
+    await query.answer(text=t(confirmation_key, lang))
 
 
 async def handle_feedback_callback_with_session_factory(
@@ -136,25 +138,26 @@ async def handle_feedback_callback_with_session_factory(
     bot: Bot,
     *,
     session_factory: Callable[[], Any],
+    lang: str = "zh",
 ) -> None:
     """Public helper for tests to inject a real DB session factory."""
     del bot  # reserved for future bot-side follow-up actions
-    await _handle_feedback_callback(query, session_factory=session_factory)
+    await _handle_feedback_callback(query, session_factory=session_factory, lang=lang)
 
 
-async def handle_explain_concept(query: CallbackQuery, bot: Bot) -> None:
+async def handle_explain_concept(query: CallbackQuery, bot: Bot, *, lang: str = "zh") -> None:
     """Placeholder handler for '解释概念' button (Phase 4 feature).
 
     Logs intent and replies with coming-soon message. No DB write.
     """
     logger.info("explain_concept requested by user=%d data=%s", query.from_user.id, query.data)
-    await query.answer(text="❓ 解释概念功能即将推出，敬请期待！(Phase 4)")
+    await query.answer(text=t("explain_coming", lang))
 
 
-async def handle_discuss(query: CallbackQuery, bot: Bot) -> None:
+async def handle_discuss(query: CallbackQuery, bot: Bot, *, lang: str = "zh") -> None:
     """Placeholder handler for '追问' button (Phase 4 feature).
 
     Logs intent and replies with coming-soon message. No DB write.
     """
     logger.info("discuss requested by user=%d data=%s", query.from_user.id, query.data)
-    await query.answer(text="💬 追问功能即将推出，敬请期待！(Phase 4)")
+    await query.answer(text=t("discuss_coming", lang))

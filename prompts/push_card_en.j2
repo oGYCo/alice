@@ -1,0 +1,42 @@
+{% if card_type | default("deep_knowledge") == "time_sensitive" %}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ Time-Sensitive
+
+{{ title }}
+
+What: {{ what | default(summary) }}
+Impact: {{ impact | default("") }}
+
+🔗 {{ source_url }}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+{% elif card_type | default("deep_knowledge") == "thought_provoking" %}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 Thought-Provoking{% if estimated_read_time %} · Est. {{ estimated_read_time }} min read{% endif %}
+
+{{ title }}
+
+{{ summary }}
+
+Push reason: {{ push_reason | default("") }}
+
+🔗 Source: {{ source_url }}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+{% else %}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 Deep Knowledge · Est. {{ estimated_read_time | default("") }} min read
+
+{{ title }}
+
+┈┈ Summary ┈┈
+{{ summary | default("") }}
+
+┈┈ Push Reason ┈┈
+{{ push_reason | default("") }}
+
+{% if key_points %}┈┈ Key Points ┈┈
+{% for point in key_points %}• {{ point }}
+{% endfor %}{% endif %}{% if reading_advice %}┈┈ Reading Advice ┈┈
+{{ reading_advice }}
+{% endif %}🔗 Source: {{ source_url }}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+{% endif %}

@@ -273,7 +273,7 @@ class TestDeliverPush:
 
         captured_calls = []
 
-        async def fake_send_push(*, bot, chat_id, content):
+        async def fake_send_push(*, bot, chat_id, content, lang="zh"):
             captured_calls.append(content)
 
         with patch("alice.services.push.send_push", side_effect=fake_send_push):

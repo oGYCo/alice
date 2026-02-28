@@ -255,6 +255,7 @@ class PushService:
         chat_id: int,
         content_list: list[Content],
         session: AsyncSession,
+        lang: str = "zh",
     ) -> None:
         """Deliver push cards to a Telegram user and record timestamps.
 
@@ -272,7 +273,7 @@ class PushService:
 
         for content in content_list:
             schema = ContentResponseSchema.model_validate(content)
-            await send_push(bot=bot, chat_id=chat_id, content=schema)
+            await send_push(bot=bot, chat_id=chat_id, content=schema, lang=lang)
             content.pushed_at = now
 
         await session.commit()

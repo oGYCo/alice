@@ -7,28 +7,12 @@ import time
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from alice.bot.i18n import t
 from alice.prompts import prompt_manager
 from alice.schemas.content import ContentResponseSchema
 from alice.schemas.feedback import FeedbackType
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Button definitions — maps display text to callback data type
-# ---------------------------------------------------------------------------
-
-_FEEDBACK_BUTTONS: list[tuple[str, str]] = [
-    ("👍高质量", FeedbackType.valuable_learned),
-    ("⏰稍后再看", FeedbackType.save_for_later),
-    ("📖已知晓", FeedbackType.already_known),
-    ("👎无价值", FeedbackType.not_valuable),
-]
-
-_EXTRA_BUTTONS: list[tuple[str, str]] = [
-    ("❓解释概念", "explain"),
-    ("💬追问", "discuss"),
-]
-
 
 # ---------------------------------------------------------------------------
 # Card builder
@@ -47,71 +31,77 @@ def _get_card_type(content: ContentResponseSchema) -> str:
 
 
 def _build_buttons_for_card_type(
-    card_type: str, content_id: int
+    card_type: str, content_id: int, lang: str = "zh",
 ) -> list[list[InlineKeyboardButton]]:
     """Build inline keyboard based on card type."""
     if card_type == "time_sensitive":
-        # 1 row, 2 buttons
         row = [
             InlineKeyboardButton(
-                text="✅已了解",
+                text=t("btn_acknowledged", lang),
                 callback_data=f"feedback:valuable_learned:{content_id}",
             ),
             InlineKeyboardButton(
-                text="📌需要跟进",
+                text=t("btn_follow_up", lang),
                 callback_data=f"feedback:save_for_later:{content_id}",
             ),
         ]
         return [row]
     elif card_type == "thought_provoking":
-        # 1 row, 4 buttons
         row = [
             InlineKeyboardButton(
-                text="👍有启发",
+                text=t("btn_inspiring", lang),
                 callback_data=f"feedback:valuable_learned:{content_id}",
             ),
             InlineKeyboardButton(
-                text="⏰稍后",
+                text=t("btn_later_short", lang),
                 callback_data=f"feedback:save_for_later:{content_id}",
             ),
             InlineKeyboardButton(
-                text="👎无感",
+                text=t("btn_meh", lang),
                 callback_data=f"feedback:not_valuable:{content_id}",
             ),
             InlineKeyboardButton(
-                text="💬讨论",
+                text=t("btn_discuss_short", lang),
                 callback_data=f"discuss:{content_id}",
             ),
         ]
         return [row]
     else:
-        # deep_knowledge: 2 rows, 3+3 buttons
+        # deep_knowledge: 2 rows
         row1 = [
             InlineKeyboardButton(
-                text=label,
-                callback_data=f"feedback:{fb_type}:{content_id}",
-            )
-            for label, fb_type in _FEEDBACK_BUTTONS[:3]
-        ]
-        row2_feedback = [
+                text=t("btn_quality", lang),
+                callback_data=f"feedback:{FeedbackType.valuable_learned}:{content_id}",
+            ),
             InlineKeyboardButton(
-                text=_FEEDBACK_BUTTONS[3][0],
-                callback_data=f"feedback:{_FEEDBACK_BUTTONS[3][1]}:{content_id}",
-            )
-        ]
-        row2_extra = [
+                text=t("btn_later", lang),
+                callback_data=f"feedback:{FeedbackType.save_for_later}:{content_id}",
+            ),
             InlineKeyboardButton(
-                text=label,
-                callback_data=f"{cb_prefix}:{content_id}",
-            )
-            for label, cb_prefix in _EXTRA_BUTTONS
+                text=t("btn_known", lang),
+                callback_data=f"feedback:{FeedbackType.already_known}:{content_id}",
+            ),
         ]
-        row2 = row2_feedback + row2_extra
+        row2 = [
+            InlineKeyboardButton(
+                text=t("btn_not_valuable", lang),
+                callback_data=f"feedback:{FeedbackType.not_valuable}:{content_id}",
+            ),
+            InlineKeyboardButton(
+                text=t("btn_explain", lang),
+                callback_data=f"explain:{content_id}",
+            ),
+            InlineKeyboardButton(
+                text=t("btn_discuss", lang),
+                callback_data=f"discuss:{content_id}",
+            ),
+        ]
         return [row1, row2]
 
 
 def build_push_card(
     content: ContentResponseSchema,
+    lang: str = "zh",
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Build Telegram push card text and inline keyboard markup using PromptManager.
 
@@ -120,8 +110,9 @@ def build_push_card(
     card_type = _get_card_type(content)
     metadata = content.metadata_ or {}
 
+    template_name = "push_card" if lang == "zh" else "push_card_en"
     text = prompt_manager.render(
-        "push_card",
+        template_name,
         card_type=card_type,
         title=content.title or "(无标题)",
         summary=content.summary or "",
@@ -135,7 +126,7 @@ def build_push_card(
     )
 
     # Build inline keyboard based on card type
-    keyboard = _build_buttons_for_card_type(card_type, content.id)
+    keyboard = _build_buttons_for_card_type(card_type, content.id, lang)
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     return text, markup
 
@@ -145,9 +136,9 @@ def build_push_card(
 # ---------------------------------------------------------------------------
 
 
-async def send_push(*, bot: Bot, chat_id: int, content: ContentResponseSchema) -> None:
+async def send_push(*, bot: Bot, chat_id: int, content: ContentResponseSchema, lang: str = "zh") -> None:
     """Send a formatted push card to the given chat_id."""
-    text, markup = build_push_card(content)
+    text, markup = build_push_card(content, lang=lang)
     await bot.send_message(
         chat_id=chat_id,
         text=text,

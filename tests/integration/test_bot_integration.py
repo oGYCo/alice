@@ -73,7 +73,7 @@ async def db_seed(engine):
                     "VALUES (:id, :chat_id, '{}') "
                     "ON CONFLICT (id) DO NOTHING"
                 ),
-                {"id": uid, "chat_id": uid * 10},  # unique chat_id != id
+                {"id": uid, "chat_id": uid},  # chat_id == id (handler looks up by telegram_chat_id == from_user.id)
             )
 
         # Seed content rows with forced IDs

@@ -79,7 +79,7 @@ async def db_seed(engine):
                     "VALUES (:id, :chat_id, '{}') "
                     "ON CONFLICT (id) DO NOTHING"
                 ),
-                {"id": uid, "chat_id": uid + 900000},
+                {"id": uid, "chat_id": uid},  # chat_id == id (handler looks up by telegram_chat_id == from_user.id)
             )
     yield
     async with engine.begin() as conn:

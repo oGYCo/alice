@@ -254,6 +254,9 @@ curl -X POST http://localhost:8000/api/v1/pipeline/fetch/trigger \
 
 各数据源还有独立的动态调度（基于 `fetch_interval_minutes` + 随机 jitter）。
 
+## Status
+![Alt](https://repobeats.axiom.co/api/embed/804172554acbfa044e815782ff8c848bde477070.svg "Repobeats analytics image")
+
 ## 测试
 
 ```bash

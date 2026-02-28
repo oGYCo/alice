@@ -224,8 +224,10 @@ def task_run_graph_extraction(self, content_id: int) -> dict:
     """Stage 2.5: Extract concept subgraph and store in Neo4j.
 
     Reads:  content.pipeline_status == 'understood', summary, key_points
-    Writes: concept nodes + relationships into Neo4j (non-blocking if Neo4j down)
-    Next:   task_run_scoring (always, even if extraction fails)
+    Writes: concept nodes + relationships into Neo4j
+    Retry:  Up to max_retries on transient errors; after retries exhausted,
+            records failure in content.metadata_ and proceeds to scoring.
+    Next:   task_run_scoring (after success or retries exhausted)
     """
 
     async def _run() -> dict:
@@ -281,13 +283,25 @@ def task_run_graph_extraction(self, content_id: int) -> dict:
                 finally:
                     await graph_client.close()
             except Exception as exc:
-                # Graph extraction is best-effort: log and continue pipeline
                 logger.error(
                     "graph_extraction_error",
                     extra={"content_id": content_id, "error": str(exc)},
                 )
+                try:
+                    raise self.retry(exc=exc)
+                except self.MaxRetriesExceededError:
+                    # Retries exhausted — record failure and proceed to scoring
+                    logger.error(
+                        "graph_extraction_retries_exhausted",
+                        extra={"content_id": content_id, "error": str(exc)},
+                    )
+                    meta = dict(content.metadata_ or {})
+                    meta["graph_extraction_failed"] = True
+                    meta["graph_extraction_error"] = str(exc)
+                    content.metadata_ = meta
+                    await session.commit()
 
-            # Always proceed to scoring if this is part of normal pipeline
+            # Proceed to scoring if this is part of normal pipeline
             if should_run_scoring:
                 task_run_scoring.delay(content_id)
             return {"content_id": content_id, "stage": "graph_extraction"}

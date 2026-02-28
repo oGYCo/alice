@@ -14,9 +14,9 @@ if str(src_path) not in sys.path:
 @pytest.fixture
 def test_env_override(monkeypatch):
     """Fixture to override environment variables for tests."""
-    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5433/alice_test")
-    monkeypatch.setenv("CELERY_BROKER_URL", "redis://localhost:6380/0")
-    monkeypatch.setenv("REDIS_URL", "redis://localhost:6380/0")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://alice:alice@localhost:5432/alice_test")
+    monkeypatch.setenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     monkeypatch.setenv("DEBUG", "true")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     return monkeypatch

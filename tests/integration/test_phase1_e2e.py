@@ -9,17 +9,14 @@ Tests the Phase 1 features via HTTP API using httpx.AsyncClient:
 - Enhanced Telegram push card formatting
 - Push preferences endpoint
 
-Requires a real PostgreSQL test database.
-Set TEST_DATABASE_URL env var to run:
-    export TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/alice_test"
-    uv run pytest tests/integration/test_phase1_e2e.py -v -m integration
+Runs against real PostgreSQL from docker-compose.yml (localhost:5432, database: alice_test).
+Override with TEST_DATABASE_URL env var if needed.
 
-Skip automatically when TEST_DATABASE_URL is not set.
+    uv run pytest tests/integration/test_phase1_e2e.py -v -m integration
 """
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 
 import httpx
@@ -36,16 +33,16 @@ from alice.services.dedup import DeduplicationService
 from alice.services.push_scheduler import PushScheduler, PushSchedulerSettings
 from alice.services.scoring import SevenDimensionScoringService
 
+from .conftest import ensure_test_database, get_test_database_url
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
-# Module-level skip if TEST_DATABASE_URL not set
+# Module-level setup
 # ---------------------------------------------------------------------------
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-
-if not TEST_DATABASE_URL:
-    pytest.skip("TEST_DATABASE_URL not set — skipping integration tests", allow_module_level=True)
+ensure_test_database()
+TEST_DATABASE_URL = get_test_database_url()
 
 
 # ---------------------------------------------------------------------------

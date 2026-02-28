@@ -42,7 +42,6 @@ alice/
 ├── DESIGN.md
 ├── AGENTS.md
 ├── docker-compose.yml
-├── docker-compose.test.yml
 ├── pyproject.toml
 ├── alembic/
 ├── prompts/                # Jinja2 prompt templates (*.j2)
@@ -229,9 +228,10 @@ cd frontend && npm run test
 
 ### 8.2 后端集成测试（真实 PostgreSQL / 可选 Neo4j）
 
+集成测试直接连接 `docker-compose.yml` 的真实服务，使用独立的 `alice_test` 数据库（自动创建）：
+
 ```bash
-docker compose -f docker-compose.test.yml up -d
-export TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5433/alice_test"
+docker compose up -d
 uv run pytest tests/integration -m integration -v
 ```
 
@@ -246,7 +246,7 @@ export NEO4J_TEST_PASS="alice_neo4j"
 直接运行 `test_phase2_integration.py`（避免因缺少环境变量被 skip）：
 
 ```bash
-TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5433/alice_test" \
+TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5432/alice_test" \
 NEO4J_TEST_URI="bolt://localhost:7687" \
 NEO4J_TEST_USER="neo4j" \
 NEO4J_TEST_PASS="alice_neo4j" \

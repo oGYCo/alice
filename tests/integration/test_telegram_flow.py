@@ -5,17 +5,14 @@ Tests Telegram bot interactions using callback objects and a real PostgreSQL DB:
 - Feedback handler stores feedback to DB
 - Feedback callback → KGUpdater → acknowledgment message
 
-Requires a real PostgreSQL test database.
-Set TEST_DATABASE_URL env var to run:
-    export TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/alice_test"
-    uv run pytest tests/integration/test_telegram_flow.py -v --timeout=120 -m integration
+Runs against real PostgreSQL from docker-compose.yml (localhost:5432, database: alice_test).
+Override with TEST_DATABASE_URL env var if needed.
 
-Skip automatically when TEST_DATABASE_URL is not set.
+    uv run pytest tests/integration/test_telegram_flow.py -v --timeout=120 -m integration
 """
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 
 import pytest
@@ -31,19 +28,16 @@ from alice.models import Base
 from alice.models.content import Content, PipelineStatus
 from alice.models.feedback import Feedback, FeedbackType
 
+from .conftest import ensure_test_database, get_test_database_url
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
-# Module-level skip
+# Module-level setup
 # ---------------------------------------------------------------------------
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-
-if not TEST_DATABASE_URL:
-    pytest.skip(
-        "TEST_DATABASE_URL not set — skipping Telegram flow integration tests",
-        allow_module_level=True,
-    )
+ensure_test_database()
+TEST_DATABASE_URL = get_test_database_url()
 
 # ---------------------------------------------------------------------------
 # Fixtures

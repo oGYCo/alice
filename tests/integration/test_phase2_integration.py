@@ -1,23 +1,22 @@
 """Phase 2 integration tests for Alice AI Secretary.
 
-Tests Phase 2 features against real services:
+Tests Phase 2 features against real services from docker-compose.yml:
 - Content-to-KG pipeline: subgraph extraction → Neo4j → GraphRAG queryable
 - Feedback loop: feedback → KGUpdater → query reflects changes
 - Push-to-Feed ordering: scored content → pushed → feed API → correct ranking
 - Match scoring: high-match content ranks above low-match
 
-Requires real services:
-  - TEST_DATABASE_URL: PostgreSQL test database
-  - NEO4J_TEST_URI: Neo4j instance (e.g. bolt://localhost:7687)
+Runs against:
+  - PostgreSQL (localhost:5432, database: alice_test)
+  - Neo4j (localhost:7687)
 
-Skip automatically when environment variables are not set.
-Run with:
+Override with TEST_DATABASE_URL / NEO4J_TEST_URI env vars if needed.
+
     uv run pytest tests/integration/test_phase2_integration.py -v --timeout=120 -m integration
 """
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 
 import pytest
@@ -36,19 +35,28 @@ from alice.models.user import User
 from alice.services.kg_updater import KGUpdater
 from alice.services.matching import MatchingService
 
+from .conftest import (
+    ensure_test_database,
+    get_neo4j_test_pass,
+    get_neo4j_test_uri,
+    get_neo4j_test_user,
+    get_test_database_url,
+)
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
-# Module-level skip if required env vars are not set
+# Module-level setup
 # ---------------------------------------------------------------------------
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-NEO4J_TEST_URI = os.environ.get("NEO4J_TEST_URI", "")
-NEO4J_TEST_USER = os.environ.get("NEO4J_TEST_USER", "neo4j")
-NEO4J_TEST_PASS = os.environ.get("NEO4J_TEST_PASS", "password")
-PHASE2_LLM_PROVIDER = os.environ.get("PHASE2_LLM_PROVIDER", "ollama")
+ensure_test_database()
+TEST_DATABASE_URL = get_test_database_url()
+NEO4J_TEST_URI = get_neo4j_test_uri()
+NEO4J_TEST_USER = get_neo4j_test_user()
+NEO4J_TEST_PASS = get_neo4j_test_pass()
+PHASE2_LLM_PROVIDER = "ollama"
 
-_MISSING = []
+_MISSING: list[str] = []
 if not TEST_DATABASE_URL:
     _MISSING.append("TEST_DATABASE_URL")
 if not NEO4J_TEST_URI:

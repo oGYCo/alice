@@ -1,14 +1,10 @@
 """Integration tests for bot feedback webhook integration.
 
-Requires a real PostgreSQL test database.
-Set TEST_DATABASE_URL env var to run:
-    export TEST_DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/alice_test"
+Runs against real PostgreSQL from docker-compose.yml (localhost:5432, database: alice_test).
+Override with TEST_DATABASE_URL env var if needed.
+
     uv run pytest tests/integration/test_bot_integration.py -v -m integration
-
-Skip automatically when TEST_DATABASE_URL is not set.
 """
-
-import os
 
 import pytest
 import pytest_asyncio
@@ -22,17 +18,16 @@ from alice.bot.handlers.feedback import (
 from alice.models import Base
 from alice.models.feedback import Feedback, FeedbackType
 
+from .conftest import ensure_test_database, get_test_database_url
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
-# Skip logic
+# Setup
 # ---------------------------------------------------------------------------
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-
-# Skip entire module if TEST_DATABASE_URL not set
-if not TEST_DATABASE_URL:
-    pytest.skip("TEST_DATABASE_URL not set — skipping integration tests", allow_module_level=True)
+ensure_test_database()
+TEST_DATABASE_URL = get_test_database_url()
 
 
 # ---------------------------------------------------------------------------

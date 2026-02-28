@@ -27,7 +27,7 @@ test:
 	uv run pytest tests/ -v
 
 test-phase2:
-	TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5433/alice_test" \
+	TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5432/alice_test" \
 	NEO4J_TEST_URI="bolt://localhost:7687" \
 	NEO4J_TEST_USER="neo4j" \
 	NEO4J_TEST_PASS="alice_neo4j" \

@@ -1,19 +1,15 @@
 """End-to-end integration tests for Phase 0 Alice API.
 
-This suite runs against real dependencies:
-- PostgreSQL test DB
-- Redis broker for Celery dispatch
+This suite runs against real dependencies from docker-compose.yml:
+- PostgreSQL (localhost:5432, database: alice_test)
+- Redis broker for Celery dispatch (localhost:6379)
 - Local HTTP RSS server (no connector override)
 
-Required env vars:
-    export TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5433/alice_test"
-Optional env var:
-    export TEST_REDIS_URL="redis://localhost:6380/0"
+Override with TEST_DATABASE_URL / TEST_REDIS_URL env vars if needed.
 """
 
 from __future__ import annotations
 
-import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -31,13 +27,13 @@ from alice.models import Base
 from alice.services.source_service import SourceService
 from alice.worker.celery_app import celery_app
 
+from .conftest import ensure_test_database, get_test_database_url, get_test_redis_url
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6380/0")
-
-if not TEST_DATABASE_URL:
-    pytest.skip("TEST_DATABASE_URL not set — skipping integration tests", allow_module_level=True)
+ensure_test_database()
+TEST_DATABASE_URL = get_test_database_url()
+TEST_REDIS_URL = get_test_redis_url()
 
 
 class _RSSFixtureHandler(BaseHTTPRequestHandler):

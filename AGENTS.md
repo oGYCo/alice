@@ -40,7 +40,6 @@ alice/
 ├── DESIGN.md
 ├── idea.md
 ├── docker-compose.yml
-├── docker-compose.test.yml
 ├── pyproject.toml
 ├── alembic/
 ├── prompts/

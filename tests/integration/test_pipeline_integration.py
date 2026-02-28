@@ -1,14 +1,15 @@
 """Integration tests for PipelineOrchestrator with real Redis dispatch path.
 
-Requires:
-- TEST_DATABASE_URL (real PostgreSQL test DB)
-- TEST_REDIS_URL (real Redis broker for Celery `.delay()`)
+Runs against real services from docker-compose.yml:
+- PostgreSQL (localhost:5432, database: alice_test)
+- Redis broker for Celery .delay() (localhost:6379)
+
+Override with TEST_DATABASE_URL / TEST_REDIS_URL env vars if needed.
 """
 
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 import pytest_asyncio
@@ -23,13 +24,13 @@ from alice.schemas.content import RawContentSchema
 from alice.services.storage import ContentStorageService
 from alice.worker.celery_app import celery_app
 
+from .conftest import ensure_test_database, get_test_database_url, get_test_redis_url
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6380/0")
-
-if not TEST_DATABASE_URL:
-    pytest.skip("TEST_DATABASE_URL not set — skipping integration tests", allow_module_level=True)
+ensure_test_database()
+TEST_DATABASE_URL = get_test_database_url()
+TEST_REDIS_URL = get_test_redis_url()
 
 
 @pytest.fixture(scope="module", autouse=True)

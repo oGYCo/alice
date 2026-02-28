@@ -7,16 +7,15 @@ Tests cover:
 - 1.4 GraphRAG hybrid search API returns results
 - 1.5 Feedback API dispatches KG update task
 
-Requires:
-  - TEST_DATABASE_URL: PostgreSQL test database
-  - NEO4J_TEST_URI: Neo4j instance
+Runs against real services from docker-compose.yml:
+  - PostgreSQL (localhost:5432, database: alice_test)
+  - Neo4j (localhost:7687)
 
-Skip automatically when environment variables are not set.
+Override with TEST_DATABASE_URL / NEO4J_TEST_URI env vars if needed.
 """
 
 from __future__ import annotations
 
-import os
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -35,16 +34,25 @@ from alice.services.matching import MatchingService
 from alice.services.push import PushService
 from alice.services.ranking import RankingService
 
+from .conftest import (
+    ensure_test_database,
+    get_neo4j_test_pass,
+    get_neo4j_test_uri,
+    get_neo4j_test_user,
+    get_test_database_url,
+)
+
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="module")]
 
 # ---------------------------------------------------------------------------
 # Env-based skip
 # ---------------------------------------------------------------------------
 
-TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
-NEO4J_TEST_URI = os.environ.get("NEO4J_TEST_URI", "")
-NEO4J_TEST_USER = os.environ.get("NEO4J_TEST_USER", "neo4j")
-NEO4J_TEST_PASS = os.environ.get("NEO4J_TEST_PASS", "password")
+ensure_test_database()
+TEST_DATABASE_URL = get_test_database_url()
+NEO4J_TEST_URI = get_neo4j_test_uri()
+NEO4J_TEST_USER = get_neo4j_test_user()
+NEO4J_TEST_PASS = get_neo4j_test_pass()
 
 _need_db = pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL not set")
 _need_neo4j = pytest.mark.skipif(not NEO4J_TEST_URI, reason="NEO4J_TEST_URI not set")

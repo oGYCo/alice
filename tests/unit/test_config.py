@@ -16,7 +16,7 @@ def test_config_loads_with_defaults():
 
 def test_config_overrides_from_env(monkeypatch):
     """Test that Settings respects environment variable overrides."""
-    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5433/alice_test")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://alice:alice@localhost:5432/alice_test")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("DEBUG", "true")
 

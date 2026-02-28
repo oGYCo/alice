@@ -1,16 +1,7 @@
 <div align="center">
 
-```
-     _    _ _
-    / \  | (_) ___ ___
-   / _ \ | | |/ __/ _ \
-  / ___ \| | | (_|  __/
- /_/   \_\_|_|\___\___|
-```
+<img src=".github/assets/banner.svg" width="100%" alt="Alice — AI-Powered Information Secretary" />
 
-**Your AI-Powered Information Secretary**
-
-Cuts through information noise to surface what matters —<br/>
 personalized ranking · knowledge-graph-aware push · a feedback loop that learns
 
 <br/>

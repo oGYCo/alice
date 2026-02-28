@@ -1,0 +1,116 @@
+<svg width="900" height="260" viewBox="0 0 900 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="900" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0c0a1d"/>
+      <stop offset="35%" stop-color="#13112b"/>
+      <stop offset="65%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#2e1065"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="400" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="nodeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0.2"/>
+    </linearGradient>
+    <filter id="textglow">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="10" result="blur"/>
+      <feFlood flood-color="#7c3aed" flood-opacity="0.35"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softglow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="12"/>
+    </filter>
+    <!-- Subtle grid -->
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#6366f1" stroke-opacity="0.04" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="260" fill="url(#bg)"/>
+  <rect width="900" height="260" fill="url(#grid)"/>
+
+  <!-- Ambient glow spots -->
+  <circle cx="450" cy="120" r="200" fill="#7c3aed" opacity="0.04" filter="url(#softglow)"/>
+  <circle cx="150" cy="200" r="100" fill="#4338ca" opacity="0.05"/>
+  <circle cx="750" cy="60" r="90" fill="#6d28d9" opacity="0.05"/>
+
+  <!-- Top accent line -->
+  <rect x="0" y="0" width="900" height="1.5" fill="url(#accent)" opacity="0.5"/>
+
+  <!-- Decorative network nodes (left side) -->
+  <g opacity="0.15" stroke="#818cf8" stroke-width="0.8" fill="none">
+    <!-- Left cluster -->
+    <circle cx="80" cy="80" r="3" fill="#818cf8" opacity="0.6"/>
+    <circle cx="140" cy="55" r="2.5" fill="#818cf8" opacity="0.4"/>
+    <circle cx="110" cy="130" r="2" fill="#818cf8" opacity="0.5"/>
+    <circle cx="45" cy="140" r="2.5" fill="#818cf8" opacity="0.3"/>
+    <circle cx="170" cy="110" r="1.8" fill="#818cf8" opacity="0.4"/>
+    <line x1="80" y1="80" x2="140" y2="55"/>
+    <line x1="80" y1="80" x2="110" y2="130"/>
+    <line x1="110" y1="130" x2="45" y2="140"/>
+    <line x1="110" y1="130" x2="170" y2="110"/>
+    <line x1="140" y1="55" x2="170" y2="110"/>
+    <!-- Right cluster -->
+    <circle cx="820" cy="90" r="3" fill="#818cf8" opacity="0.6"/>
+    <circle cx="770" cy="60" r="2" fill="#818cf8" opacity="0.4"/>
+    <circle cx="855" cy="140" r="2.5" fill="#818cf8" opacity="0.5"/>
+    <circle cx="790" cy="155" r="1.8" fill="#818cf8" opacity="0.3"/>
+    <circle cx="740" cy="120" r="2" fill="#818cf8" opacity="0.4"/>
+    <line x1="820" y1="90" x2="770" y2="60"/>
+    <line x1="820" y1="90" x2="855" y2="140"/>
+    <line x1="855" y1="140" x2="790" y2="155"/>
+    <line x1="790" y1="155" x2="740" y2="120"/>
+    <line x1="740" y1="120" x2="770" y2="60"/>
+  </g>
+
+  <!-- Floating particles -->
+  <g fill="#a78bfa">
+    <circle cx="220" cy="45" r="1" opacity="0.2"/>
+    <circle cx="310" cy="210" r="1.2" opacity="0.15"/>
+    <circle cx="600" cy="35" r="0.8" opacity="0.2"/>
+    <circle cx="680" cy="220" r="1" opacity="0.15"/>
+    <circle cx="500" cy="240" r="0.8" opacity="0.12"/>
+    <circle cx="250" cy="170" r="0.6" opacity="0.18"/>
+    <circle cx="650" cy="180" r="0.7" opacity="0.14"/>
+  </g>
+
+  <!-- Title: Alice -->
+  <text x="450" y="118" text-anchor="middle"
+        font-family="'Segoe UI', 'SF Pro Display', 'Inter', system-ui, -apple-system, sans-serif"
+        font-size="64" font-weight="300" letter-spacing="18" fill="white" filter="url(#textglow)">
+    ALICE
+  </text>
+
+  <!-- Decorative divider -->
+  <line x1="330" y1="142" x2="570" y2="142" stroke="url(#accent)" stroke-width="1" opacity="0.35"/>
+  <circle cx="450" cy="142" r="2" fill="#a78bfa" opacity="0.5"/>
+  <circle cx="330" cy="142" r="1.2" fill="#818cf8" opacity="0.3"/>
+  <circle cx="570" cy="142" r="1.2" fill="#818cf8" opacity="0.3"/>
+
+  <!-- Subtitle -->
+  <text x="450" y="176" text-anchor="middle"
+        font-family="'Segoe UI', 'SF Pro Text', 'Inter', system-ui, -apple-system, sans-serif"
+        font-size="14" font-weight="300" letter-spacing="6" fill="#c4b5fd" opacity="0.75">
+    AI-POWERED INFORMATION SECRETARY
+  </text>
+
+  <!-- Version badge -->
+  <g transform="translate(390, 196)">
+    <rect width="120" height="22" rx="11" fill="#818cf8" opacity="0.1" stroke="#818cf8" stroke-opacity="0.2" stroke-width="0.5"/>
+    <text x="60" y="15" text-anchor="middle"
+          font-family="'Segoe UI', 'SF Pro Text', 'Inter', system-ui, sans-serif"
+          font-size="10" font-weight="400" letter-spacing="2" fill="#a78bfa" opacity="0.7">
+      v0.1.0 BETA
+    </text>
+  </g>
+
+  <!-- Bottom accent line -->
+  <rect x="0" y="258.5" width="900" height="1.5" fill="url(#accent)" opacity="0.25"/>
+</svg>

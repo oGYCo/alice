@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
+import re
 import time
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from alice.bot.i18n import t
@@ -13,6 +15,20 @@ from alice.schemas.content import ContentResponseSchema
 from alice.schemas.feedback import FeedbackType
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Markdown escaping
+# ---------------------------------------------------------------------------
+
+_MD_SPECIAL_RE = re.compile(r"([_*`\[\]])")
+
+
+def _escape_markdown(text: str) -> str:
+    """Escape Telegram Markdown v1 special characters."""
+    if not text:
+        return text
+    return _MD_SPECIAL_RE.sub(r"\\\1", text)
+
 
 # ---------------------------------------------------------------------------
 # Card builder
@@ -114,15 +130,15 @@ def build_push_card(
     text = prompt_manager.render(
         template_name,
         card_type=card_type,
-        title=content.title or "(无标题)",
-        summary=content.summary or "",
-        key_points=content.key_points or [],
+        title=_escape_markdown(content.title or "(无标题)"),
+        summary=_escape_markdown(content.summary or ""),
+        key_points=[_escape_markdown(p) for p in (content.key_points or [])],
         source_url=content.source_url or "",
         estimated_read_time=content.estimated_read_time,
-        push_reason=metadata.get("push_reason", ""),
-        reading_advice=metadata.get("reading_advice", ""),
-        what=metadata.get("what", ""),
-        impact=metadata.get("impact", ""),
+        push_reason=_escape_markdown(metadata.get("push_reason", "")),
+        reading_advice=_escape_markdown(metadata.get("reading_advice", "")),
+        what=_escape_markdown(metadata.get("what", "")),
+        impact=_escape_markdown(metadata.get("impact", "")),
     )
 
     # Build inline keyboard based on card type
@@ -137,14 +153,31 @@ def build_push_card(
 
 
 async def send_push(*, bot: Bot, chat_id: int, content: ContentResponseSchema, lang: str = "zh") -> None:
-    """Send a formatted push card to the given chat_id."""
+    """Send a formatted push card to the given chat_id.
+
+    Attempts Markdown first; on ``TelegramBadRequest`` (typically caused by
+    un-parseable markup) falls back to sending plain text so the delivery is
+    not lost.
+    """
     text, markup = build_push_card(content, lang=lang)
-    await bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        reply_markup=markup,
-        parse_mode="Markdown",
-    )
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=markup,
+            parse_mode="Markdown",
+        )
+    except TelegramBadRequest:
+        logger.warning(
+            "send_push_markdown_fallback",
+            extra={"chat_id": chat_id, "content_id": content.id},
+        )
+        # Retry without parse_mode so the user still receives the card
+        await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=markup,
+        )
 
 
 # ---------------------------------------------------------------------------

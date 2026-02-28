@@ -7,6 +7,8 @@ asyncio_mode = 'auto' — no @pytest.mark.asyncio needed.
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from aiogram.exceptions import TelegramBadRequest
+
 from alice.models.content import Content, PipelineStatus
 from alice.schemas.content import ContentResponseSchema
 
@@ -308,3 +310,111 @@ class TestDeliverPush:
 
         mock_send.assert_not_called()
         session.commit.assert_not_called()
+
+
+class TestDeliverPushPartialFailure:
+    """deliver_push should handle per-item failures gracefully."""
+
+    async def test_partial_failure_still_delivers_others(self):
+        """If one send_push fails, the rest should still be delivered."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        bot = MagicMock()
+        content1 = _make_content(id=1, pushed_at=None)
+        content2 = _make_content(id=2, pushed_at=None)
+        content3 = _make_content(id=3, pushed_at=None)
+
+        call_count = 0
+
+        async def flaky_send_push(*, bot, chat_id, content, lang="zh"):
+            nonlocal call_count
+            call_count += 1
+            if content.id == 2:
+                raise TelegramBadRequest(
+                    method=MagicMock(), message="Bad Request: can't parse entities"
+                )
+
+        with patch("alice.services.push.send_push", side_effect=flaky_send_push):
+            svc = PushService()
+            await svc.deliver_push(
+                bot=bot,
+                user_id=42,
+                chat_id=100,
+                content_list=[content1, content2, content3],
+                session=session,
+            )
+
+        # Items 1 and 3 should be marked as pushed
+        assert content1.pushed_at is not None
+        assert content2.pushed_at is None  # failed
+        assert content3.pushed_at is not None
+        session.commit.assert_called_once()
+
+    async def test_all_fail_still_commits(self):
+        """Even if all items fail, session.commit() must still be called."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        bot = MagicMock()
+        content = _make_content(id=1, pushed_at=None)
+
+        async def always_fail(*, bot, chat_id, content, lang="zh"):
+            raise RuntimeError("boom")
+
+        with patch("alice.services.push.send_push", side_effect=always_fail):
+            svc = PushService()
+            await svc.deliver_push(
+                bot=bot,
+                user_id=42,
+                chat_id=100,
+                content_list=[content],
+                session=session,
+            )
+
+        assert content.pushed_at is None
+        session.commit.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# send_push fallback
+# ---------------------------------------------------------------------------
+
+
+class TestSendPushFallback:
+    """send_push should fallback to plain text on TelegramBadRequest."""
+
+    async def test_fallback_on_bad_request(self):
+        """On TelegramBadRequest, send_push retries without parse_mode."""
+        from alice.bot.handlers.push import send_push
+
+        bot = AsyncMock()
+        # First call raises, second succeeds
+        bot.send_message = AsyncMock(
+            side_effect=[
+                TelegramBadRequest(
+                    method=MagicMock(), message="Bad Request: can't parse entities"
+                ),
+                MagicMock(),  # success on fallback
+            ]
+        )
+
+        schema = ContentResponseSchema(
+            id=1,
+            source="rss",
+            source_url="https://example.com",
+            title="Test",
+            pipeline_status="indexed",
+            quality_score=5.0,
+            summary="hello",
+            domains=["AI"],
+            estimated_read_time=5,
+            created_at=datetime.now(UTC),
+        )
+
+        await send_push(bot=bot, chat_id=100, content=schema)
+
+        assert bot.send_message.call_count == 2
+        # Second call should NOT have parse_mode
+        second_call_kwargs = bot.send_message.call_args_list[1][1]
+        assert "parse_mode" not in second_call_kwargs

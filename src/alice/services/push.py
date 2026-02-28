@@ -270,10 +270,29 @@ class PushService:
             return
 
         now = datetime.now(UTC)
+        failed: list[int] = []
 
         for content in content_list:
             schema = ContentResponseSchema.model_validate(content)
-            await send_push(bot=bot, chat_id=chat_id, content=schema, lang=lang)
-            content.pushed_at = now
+            try:
+                await send_push(bot=bot, chat_id=chat_id, content=schema, lang=lang)
+                content.pushed_at = now
+            except Exception:
+                logger.error(
+                    "deliver_push_item_failed",
+                    content_id=content.id,
+                    user_id=user_id,
+                    exc_info=True,
+                )
+                failed.append(content.id)
 
+        # Commit successfully delivered items even if some failed
         await session.commit()
+
+        if failed:
+            logger.warning(
+                "deliver_push_partial_failure",
+                user_id=user_id,
+                failed_ids=failed,
+                delivered=len(content_list) - len(failed),
+            )

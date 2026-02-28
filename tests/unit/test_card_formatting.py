@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import pytest
 from aiogram.types import InlineKeyboardMarkup
 
-from alice.bot.handlers.push import _get_card_type, build_push_card
+from alice.bot.handlers.push import _escape_markdown, _get_card_type, build_push_card
 from alice.schemas.content import ContentResponseSchema
 
 # ---------------------------------------------------------------------------
@@ -210,3 +210,40 @@ class TestButtonLayouts:
 
         # Second button: save_for_later
         assert buttons[1].callback_data.startswith("feedback:save_for_later:")
+
+
+# ---------------------------------------------------------------------------
+# TestEscapeMarkdown
+# ---------------------------------------------------------------------------
+
+
+class TestEscapeMarkdown:
+    """Telegram Markdown v1 special character escaping."""
+
+    def test_escapes_underscores(self) -> None:
+        assert _escape_markdown("hello_world") == r"hello\_world"
+
+    def test_escapes_asterisks(self) -> None:
+        assert _escape_markdown("bold*text*here") == r"bold\*text\*here"
+
+    def test_escapes_backticks(self) -> None:
+        assert _escape_markdown("use `code` here") == r"use \`code\` here"
+
+    def test_escapes_square_brackets(self) -> None:
+        assert _escape_markdown("[link](url)") == r"\[link\](url)"
+
+    def test_empty_string(self) -> None:
+        assert _escape_markdown("") == ""
+
+    def test_plain_text_unchanged(self) -> None:
+        assert _escape_markdown("no special chars") == "no special chars"
+
+    def test_multiple_special_chars(self) -> None:
+        result = _escape_markdown("a_b*c`d[e]f")
+        assert result == r"a\_b\*c\`d\[e\]f"
+
+    def test_build_push_card_escapes_title_with_underscores(self) -> None:
+        """Title with underscores is escaped in the rendered card."""
+        schema = _make_schema(title="flash_attention_v3")
+        text, _ = build_push_card(schema)
+        assert "flash\\_attention\\_v3" in text

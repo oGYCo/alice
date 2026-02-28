@@ -1,5 +1,6 @@
 """Tests for Celery worker infrastructure."""
 
+import warnings
 from unittest.mock import patch
 
 from alice.worker.celery_app import celery_app
@@ -7,10 +8,9 @@ from alice.worker.tasks import (
     task_fetch_all_sources,
     task_push_batch,
     task_run_gatekeeper,
-    task_run_indexing,
-    task_run_scoring,
-    task_run_understanding,
 )
+
+import alice.pipeline.tasks as _pipeline_tasks  # noqa: F401 — force registration
 
 
 def test_celery_app_created():
@@ -43,8 +43,8 @@ def test_celery_retry_config():
     assert conf.task_reject_on_worker_lost is True
 
 
-def test_tasks_are_registered():
-    """Test that all pipeline tasks are registered with Celery."""
+def test_legacy_tasks_are_registered():
+    """Test that all legacy task names are registered with Celery."""
     registered = celery_app.tasks.keys()
     expected = [
         "alice.worker.tasks.task_run_gatekeeper",
@@ -58,36 +58,33 @@ def test_tasks_are_registered():
         assert task_name in registered, f"Task {task_name} not registered"
 
 
-def test_task_gatekeeper_forwards_to_pipeline():
-    """Test gatekeeper legacy wrapper forwards to the real pipeline task."""
+def test_pipeline_tasks_are_registered():
+    """Test that canonical pipeline task names are registered with Celery."""
+    registered = celery_app.tasks.keys()
+    expected = [
+        "alice.pipeline.tasks.task_run_gatekeeper",
+        "alice.pipeline.tasks.task_run_understanding",
+        "alice.pipeline.tasks.task_run_scoring",
+        "alice.pipeline.tasks.task_run_indexing",
+        "alice.pipeline.tasks.task_push_batch",
+        "alice.pipeline.tasks.task_schedule_push_batches",
+        "alice.pipeline.tasks.task_retry_failed",
+        "alice.pipeline.tasks.task_batch_update_p_scores",
+    ]
+    for task_name in expected:
+        assert task_name in registered, f"Pipeline task {task_name} not registered"
+
+
+def test_legacy_wrapper_emits_deprecation_warning():
+    """Legacy wrappers emit DeprecationWarning when invoked."""
     expected = {"content_id": 42, "stage": "gatekeeper", "passed": True}
     with patch("alice.pipeline.tasks.task_run_gatekeeper", return_value=expected):
-        result = task_run_gatekeeper.apply(args=[42])
-    assert result.result == expected
-
-
-def test_task_understanding_forwards_to_pipeline():
-    """Test understanding legacy wrapper forwards to the real pipeline task."""
-    expected = {"content_id": 42, "stage": "understanding", "status": "ok"}
-    with patch("alice.pipeline.tasks.task_run_understanding", return_value=expected):
-        result = task_run_understanding.apply(args=[42])
-    assert result.result["stage"] == "understanding"
-
-
-def test_task_scoring_forwards_to_pipeline():
-    """Test scoring legacy wrapper forwards to the real pipeline task."""
-    expected = {"content_id": 42, "stage": "scoring", "status": "ok"}
-    with patch("alice.pipeline.tasks.task_run_scoring", return_value=expected):
-        result = task_run_scoring.apply(args=[42])
-    assert result.result["stage"] == "scoring"
-
-
-def test_task_indexing_forwards_to_pipeline():
-    """Test indexing legacy wrapper forwards to the real pipeline task."""
-    expected = {"content_id": 42, "stage": "indexing", "status": "ok"}
-    with patch("alice.pipeline.tasks.task_run_indexing", return_value=expected):
-        result = task_run_indexing.apply(args=[42])
-    assert result.result["stage"] == "indexing"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            task_run_gatekeeper.apply(args=[42])
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(deprecations) >= 1
+    assert "alice.worker.tasks.task_run_gatekeeper" in str(deprecations[0].message)
 
 
 def test_task_fetch_returns_summary():
@@ -107,7 +104,9 @@ def test_task_fetch_accepts_source_id_kwarg():
 
 def test_task_push_batch_returns_error_without_chat_id():
     """Legacy push batch returns error since chat_id is unavailable."""
-    result = task_push_batch.apply(args=[123])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        result = task_push_batch.apply(args=[123])
     assert result.result["user_id"] == 123
     assert result.result["status"] == "error"
     assert "error" in result.result

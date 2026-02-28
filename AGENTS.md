@@ -113,7 +113,7 @@ alice/
 ### Pipeline
 
 - No Celery chains for stage transitions
-- Active stage tasks: `alice.pipeline.tasks`
+- Active stage tasks: `alice.pipeline.tasks` (pipeline stages) + `alice.worker.tasks` (fetch orchestration)
 - Legacy task-name compatibility: `alice.worker.tasks`
 - Redis persistence must remain enabled (`appendonly yes`)
 

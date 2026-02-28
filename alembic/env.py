@@ -1,7 +1,6 @@
 """Alembic environment script with async engine support."""
 
 import asyncio
-import sys
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -49,12 +48,10 @@ def run_migrations_offline() -> None:
     """
     url = config.get_main_option("sqlalchemy.url")
 
-    # Don't use literal_binds for autogenerate operations
-    is_autogenerate = context.is_autogenerate
     context.configure(
         url=url,
         target_metadata=target_metadata,
-        literal_binds=not is_autogenerate,
+        literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
 
@@ -92,8 +89,4 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    # Use offline mode for autogenerate to avoid DB connection requirements
-    if "--autogenerate" in sys.argv or "revision" in sys.argv:
-        run_migrations_offline()
-    else:
-        asyncio.run(run_migrations_online())
+    asyncio.run(run_migrations_online())

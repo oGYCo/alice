@@ -5,7 +5,9 @@ set -euo pipefail
 # This script validates that all services are running and responding to basic requests
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-API_URL="http://localhost:8000"API_KEY="${ALICE_API_KEY:-alicesecret}"MAX_RETRIES=30
+API_URL="http://localhost:8000"
+API_KEY="${ALICE_API_KEY:-alicesecret}"
+MAX_RETRIES=30
 RETRY_DELAY=2
 
 echo "=== Alice AI Secretary Smoke Test ==="

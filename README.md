@@ -136,7 +136,7 @@ Each stage runs as an independent Celery task (no chaining). State is persisted 
 | 🗃️ ORM | SQLAlchemy 2.0 async + Alembic |
 | 🤖 Telegram | aiogram 3 (webhook) |
 | 📦 Package Manager | [uv](https://docs.astral.sh/uv/) |
-| 📝 Logging | structlog (JSON) |
+| 📝 Logging | structlog + stdlib (mixed) |
 
 </td>
 <td>
@@ -163,6 +163,7 @@ Each stage runs as an independent Celery task (no chaining). State is persisted 
 | 🎨 Styling | Tailwind CSS 4 + shadcn/ui |
 | 📊 State | Zustand 5 |
 | 📈 Charts | Recharts 3 |
+| 🔄 Data Fetching | fetch + useEffect (planned: TanStack Query) |
 | 🕸️ Graph Viz | @xyflow/react 12 |
 
 </td>
@@ -212,7 +213,7 @@ Each stage runs as an independent Celery task (no chaining). State is persisted 
 
 | Stage | Status Flag | Description |
 |:------|:------------|:------------|
-| **Fetch** | `fetched` | Pull raw content, URL normalization |
+| **Fetch** | `fetched` | Pull raw content, URL dedup (exact match) |
 | **Gatekeeper** | `gatekept` | Fast local-model filtering via Ollama (rule-based fallback) |
 | **Understanding** | `understood` | DeepSeek generates summary, key points, domain tags, reading time |
 | **Graph Extraction** | — | Extract concept subgraph into Neo4j (best-effort, non-blocking) |
@@ -424,7 +425,7 @@ All `/api/*` routes require an `X-API-Key` header. `/health`, `/docs`, `/openapi
 | Failed retry | Every 6 hours | `pipeline` |
 | P_score batch update | Every 24 hours | `pipeline` |
 
-> Each source also has its own dynamic schedule based on `fetch_interval_minutes` + random jitter.
+> Per-source dynamic scheduling is implemented but not yet wired into the Celery beat configuration.
 
 ---
 

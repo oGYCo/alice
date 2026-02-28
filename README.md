@@ -1,313 +1,608 @@
-# Alice — AI Secretary
+<div align="center">
 
-个人智能信息管理系统：从信息噪音中筛选高价值内容，基于用户知识状态做个性化排序与推送。
+```
+     _    _ _
+    / \  | (_) ___ ___
+   / _ \ | | |/ __/ _ \
+  / ___ \| | | (_|  __/
+ /_/   \_\_|_|\___\___|
+```
 
-> 本文档以代码为准，持续同步更新。详细设计见 `DESIGN.md`，开发约定见 `AGENTS.md`。
+**Your AI-Powered Information Secretary**
+
+Cuts through information noise to surface what matters —<br/>
+personalized ranking · knowledge-graph-aware push · a feedback loop that learns
+
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-≥3.12-3776AB?logo=python&logoColor=fff)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=fff)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js_16-000?logo=nextdotjs&logoColor=fff)](https://nextjs.org/)
+[![Neo4j](https://img.shields.io/badge/Neo4j-4581C3?logo=neo4j&logoColor=fff)](https://neo4j.com/)
+[![Celery](https://img.shields.io/badge/Celery-37814A?logo=celery&logoColor=fff)](https://docs.celeryq.dev/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=fff)](https://www.docker.com/)
+
+![Version](https://img.shields.io/badge/version-0.1.0_Early_Beta-E5A00D?style=flat)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat)
+
+[Getting Started](#-getting-started) · [Architecture](#-architecture) · [Features](#-core-features) · [API](#-api-reference) · [Testing](#-testing) · [Commands](#%EF%B8%8F-cheat-sheet)
+
+**[🇨🇳 中文文档](README_ZH.md)**
+
+</div>
 
 ---
 
-## 系统概览
+## 📖 Table of Contents
 
-Alice 实现了完整的 **采集 → 理解 → 评分 → 索引 → 推送 → 反馈** 闭环：
+- [📖 Table of Contents](#-table-of-contents)
+- [🌟 Overview](#-overview)
+- [🏗 Architecture](#-architecture)
+- [🛠 Tech Stack](#-tech-stack)
+  - [Backend](#backend)
+  - [AI](#ai)
+  - [Frontend](#frontend)
+  - [Infrastructure](#infrastructure)
+- [🌐 Service Topology](#-service-topology)
+- [✨ Core Features](#-core-features)
+  - [📡 Data Sources](#-data-sources)
+  - [🔄 Pipeline (6 Stages)](#-pipeline-6-stages)
+  - [📊 Push Ranking (P\_score)](#-push-ranking-p_score)
+  - [🧠 7-Dimension Quality Scoring](#-7-dimension-quality-scoring)
+  - [🕸️ Knowledge Graph](#️-knowledge-graph)
+  - [👤 User System](#-user-system)
+- [📂 Project Structure](#-project-structure)
+- [🚀 Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [1️⃣ Configure Environment Variables](#1️⃣-configure-environment-variables)
+  - [2️⃣ Start Backend Services](#2️⃣-start-backend-services)
+  - [3️⃣ Start Frontend](#3️⃣-start-frontend)
+  - [4️⃣ Verify](#4️⃣-verify)
+- [📡 API Reference](#-api-reference)
+- [⏰ Scheduled Tasks](#-scheduled-tasks)
+- [🖥 Frontend Pages](#-frontend-pages)
+- [🧪 Testing](#-testing)
+  - [Backend](#backend-1)
+  - [Frontend](#frontend-1)
+  - [Test Coverage Overview](#test-coverage-overview)
+- [⌨️ Cheat Sheet](#️-cheat-sheet)
+- [❓ FAQ](#-faq)
+- [⚠️ Known Limitations](#️-known-limitations)
+- [📚 Documentation](#-documentation)
+- [📊 Status](#-status)
+
+---
+
+## 🌟 Overview
+
+Alice implements a complete **Fetch → Understand → Score → Index → Push → Feedback** closed loop:
 
 ```
-RSS/arXiv ──fetch──▶ Gatekeeper ──▶ Understanding ──▶ Graph Extraction
-                       (Ollama)       (DeepSeek)        (Neo4j)
-                                                           │
-                             ┌─────────────────────────────┘
-                             ▼
-                        Scoring ──▶ Indexing ──▶ Push ──▶ Feedback
-                       (DeepSeek)  (Meilisearch) (Telegram)  (KG update)
+RSS / arXiv
+     │
+     ▼
+┌─────────┐    ┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│  Fetch   │───▶│  Gatekeeper  │───▶│  Understanding   │───▶│ Graph Extraction │
+│          │    │  (Ollama)    │    │   (DeepSeek)     │    │     (Neo4j)      │
+└─────────┘    └──────────────┘    └──────────────────┘    └────────┬─────────┘
+                                                                    │
+                    ┌───────────────────────────────────────────────┘
+                    ▼
+             ┌──────────┐    ┌───────────────┐    ┌──────────┐    ┌──────────┐
+             │ Scoring  │───▶│   Indexing     │───▶│   Push   │───▶│ Feedback │
+             │(DeepSeek)│    │ (Meilisearch) │    │(Telegram)│    │(KG update)│
+             └──────────┘    └───────────────┘    └──────────┘    └──────────┘
 ```
 
-每阶段独立 Celery 任务，不使用 chain；状态持久化到 PostgreSQL，支持故障恢复与自动重试。
+Each stage runs as an independent Celery task (no chaining). State is persisted to PostgreSQL, enabling fault recovery and automatic retries.
 
-## 技术栈
+---
 
-| 层级 | 选型 |
-|------|------|
-| 后端 API | FastAPI + Uvicorn |
-| 任务队列 | Celery + Redis（broker/backend） |
-| ORM | SQLAlchemy 2.0 async + Alembic |
-| Telegram Bot | aiogram 3（webhook 模式） |
-| 前端 | Next.js 16 App Router + Tailwind + shadcn/ui |
-| 状态管理 | Zustand + TanStack Query |
-| 主存储 | PostgreSQL 16 |
-| 全文检索 | Meilisearch v1.6 |
-| 知识图谱 | Neo4j 5 + APOC |
-| LLM | DeepSeek API（主），Ollama qwen2.5:1.5b（gatekeeper） |
-| 包管理 | uv（Python），npm（前端） |
-| 日志 | structlog（JSON 结构化） |
+## 🏗 Architecture
 
-## 服务端口
+```
+                          ┌──────────────────────────────────────────────┐
+                          │          Frontend (Next.js 16 + React 19)    │
+                          │   Feed │ Search │ Dashboard │ KG │ Settings  │
+                          └─────────────────┬────────────────────────────┘
+                                            │ X-API-Key (cookie)
+                          ┌─────────────────▼────────────────────────────┐
+                          │          API Layer (FastAPI :8000)            │
+                          │     APIKeyMiddleware → 9 Router Modules      │
+                          └──┬──────────┬──────────┬──────────┬──────────┘
+                             │          │          │          │
+                ┌────────────▼──┐  ┌────▼─────┐ ┌─▼───────┐  │
+                │  19 Services  │  │  Celery  │ │   Bot   │  │
+                │ (business     │  │  Worker  │ │ (:8081) │  │
+                │  logic)       │  │          │ │         │  │
+                └──┬──┬──┬──────┘  └────┬─────┘ └────┬────┘  │
+                   │  │  │              │            │       │
+          ┌────────▼┐ │  ▼              │            │       │
+          │PostgreSQL│ │ Neo4j 5        │            │       │
+          │   16     │ │ (knowledge     │            │       │
+          │          │ │  graph)        │            │       │
+          └──────────┘ │                │            │       │
+                       ▼                │            │       │
+                 Meilisearch ◄──────────┘            │       │
+                   v1.6                              │       │
+                                                     │       │
+                  Redis 7 ◄──────────────────────────┘       │
+                 (Broker)                                     │
+```
 
-| 服务 | 端口 |
-|------|------|
-| API (FastAPI) | 8000 |
-| Bot (aiogram) | 8081 |
-| PostgreSQL | 5432 |
-| Redis | 6379 |
-| Meilisearch | 7700 |
-| Neo4j Browser / Bolt | 7474 / 7687 |
+---
 
-## 核心功能
+## 🛠 Tech Stack
 
-### 数据源
+<table>
+<tr>
+<td>
 
-- **RSS/Atom** — 通用 Feed 订阅，支持自定义抓取间隔
-- **arXiv** — 学术论文搜索与抓取
+### Backend
 
-### Pipeline（6 阶段）
+| Component | Choice |
+|:----------|:-------|
+| 🌐 Web Framework | FastAPI + Uvicorn |
+| 📋 Task Queue | Celery + Redis |
+| 🗃️ ORM | SQLAlchemy 2.0 async + Alembic |
+| 🤖 Telegram | aiogram 3 (webhook) |
+| 📦 Package Manager | [uv](https://docs.astral.sh/uv/) |
+| 📝 Logging | structlog (JSON) |
 
-| 阶段 | 状态 | 说明 |
-|------|------|------|
-| Fetch | `fetched` | 拉取原始内容，URL 归一化 + SimHash 去重 |
-| Gatekeeper | `gatekept` | Ollama 本地模型快速筛选，规则回退兜底 |
-| Understanding | `understood` | DeepSeek 生成摘要、关键点、领域标签、阅读时长 |
-| Graph Extraction | — | 从理解结果提取概念子图写入 Neo4j（best-effort，不阻塞） |
-| Scoring | `scored` | 7 维质量评分（substance / novelty / density / credibility / actionability / social / timeliness） |
-| Indexing | `indexed` | 写入 Meilisearch 索引，计算初始 P_score |
+</td>
+<td>
 
-### 推送排序（P_score）
+### AI
+
+| Component | Choice |
+|:----------|:-------|
+| 🧠 Primary LLM | DeepSeek API |
+| 🏠 Local Model | Ollama (qwen2.5:1.5b) |
+| 🔌 Abstraction | `LLMClient` Protocol |
+| 🧪 Test Mock | `MockLLMClient` |
+
+</td>
+</tr>
+<tr>
+<td>
+
+### Frontend
+
+| Component | Choice |
+|:----------|:-------|
+| ⚛️ Framework | Next.js 16 + React 19 |
+| 🎨 Styling | Tailwind CSS 4 + shadcn/ui |
+| 📊 State | Zustand 5 |
+| 📈 Charts | Recharts 3 |
+| 🕸️ Graph Viz | @xyflow/react 12 |
+
+</td>
+<td>
+
+### Infrastructure
+
+| Component | Choice |
+|:----------|:-------|
+| 🐘 Primary DB | PostgreSQL 16 |
+| 🔍 Full-text Search | Meilisearch v1.6 |
+| 🕸️ Knowledge Graph | Neo4j 5 + APOC |
+| ⚡ Cache / Broker | Redis 7 |
+| 🐳 Containerization | Docker Compose |
+
+</td>
+</tr>
+</table>
+
+---
+
+## 🌐 Service Topology
+
+| Service | Description | Port |
+|:--------|:------------|:----:|
+| 🌐 `api` | FastAPI application server | `8000` |
+| 🤖 `bot` | Telegram Bot (webhook) | `8081` |
+| ⚙️ `worker` | Celery task worker | — |
+| ⏰ `scheduler` | Celery Beat scheduler | — |
+| 🐘 `postgres` | PostgreSQL primary database | `5432` |
+| ⚡ `redis` | Redis (broker + backend) | `6379` |
+| 🔍 `meilisearch` | Full-text search engine | `7700` |
+| 🕸️ `neo4j` | Knowledge graph database | `7474` / `7687` |
+
+---
+
+## ✨ Core Features
+
+### 📡 Data Sources
+
+| Connector | Description |
+|:----------|:------------|
+| **RSS / Atom** | General feed subscriptions with custom fetch intervals |
+| **arXiv** | Academic paper search and ingestion |
+
+### 🔄 Pipeline (6 Stages)
+
+| Stage | Status Flag | Description |
+|:------|:------------|:------------|
+| **Fetch** | `fetched` | Pull raw content, URL normalization |
+| **Gatekeeper** | `gatekept` | Fast local-model filtering via Ollama (rule-based fallback) |
+| **Understanding** | `understood` | DeepSeek generates summary, key points, domain tags, reading time |
+| **Graph Extraction** | — | Extract concept subgraph into Neo4j (best-effort, non-blocking) |
+| **Scoring** | `scored` | 7-dimension quality scoring |
+| **Indexing** | `indexed` | Write to Meilisearch index, compute initial P_score |
+
+### 📊 Push Ranking (P_score)
 
 ```
 P = Q × R × T × D × U + ε
 ```
 
-- **Q** — 质量分归一化
-- **R** — 用户-内容匹配度（基于知识图谱前置覆盖 + 概念距离 + 难度拟合）
-- **T** — 时间窗口评分（安静时段 / 工作 / 周末）
-- **D** — 时间衰减（时效性内容 24h 半衰期，知识性 7 天）
-- **U** — 紧急度
-- **ε** — 探索因子（预留）
+| Factor | Meaning |
+|:-------|:--------|
+| **Q** | Normalized quality score |
+| **R** | User-content relevance (KG coverage + concept distance + difficulty fit) |
+| **T** | Time window score (quiet hours / work / weekend) |
+| **D** | Time decay (breaking news 24h half-life, knowledge 7d) |
+| **U** | Urgency |
+| **ε** | Exploration factor (reserved, currently fixed at 0.0) |
 
-### 知识图谱
+### 🧠 7-Dimension Quality Scoring
 
-- 概念节点 + 关系抽取（PREREQUISITE_OF / EXTENDS / APPLIES_TO / CONTRASTS）
-- 用户 KNOWS 关系 + mastery 分数维护
-- Leiden 社区检测 → 知识聚类可视化
-- 知识缺口分析（高 mastery 节点邻居中的低 mastery 候选）
-- 反馈驱动的 KG 更新（正面 +0.15，负面 −0.1，已知 → 1.0）
+`substance` · `novelty` · `density` · `credibility` · `actionability` · `social` · `timeliness`
 
-### 用户系统
+### 🕸️ Knowledge Graph
 
-- **4 种模式**：daily / project / explore / low_energy（23:00–07:00 自动低能量）
-- **三层记忆**：working（当前焦点）/ short-term（14 天衰减）/ long-term
-- **FSRS v5** 间隔重复：复习卡片 + 打卡统计
-- **反应式技能**：5 个 YAML 定义的反馈处理技能（KG 更新 / 偏好调整 / 难度校准等）
+- Concept nodes + relationship extraction (`PREREQUISITE_OF` / `EXTENDS` / `APPLIES_TO` / `CONTRASTS`)
+- User `KNOWS` edges with mastery score maintenance
+- Leiden community detection → knowledge cluster visualization
+- Knowledge gap analysis (low-mastery neighbors of high-mastery nodes)
+- Feedback-driven KG updates (positive +0.15, negative −0.1, already known → 1.0)
 
-### 前端页面
+### 👤 User System
 
-| 页面 | 功能 |
-|------|------|
-| `/feed` | 无限滚动信息流，grid/list 视图，批量操作，反馈入口 |
-| `/search` | 全文搜索 + 混合搜索（graph + text + semantic），自动补全，过滤器 |
-| `/content/[id]` | Magazine 风格详情，AI 摘要 + 关键点卡片，关联子图可视化 |
-| `/dashboard` | 认知仪表盘：学习速度 / 知识增长 / 记忆概览 / FSRS 复习 / 社区聚类 / 模式指示 |
-| `/dashboard/knowledge-graph` | 交互式知识图谱可视化（React Flow） |
-| `/settings` | 数据源管理 / 推送偏好 / 时间表 / 用户模式 |
-| `/login` | API Key 认证 |
+| Feature | Description |
+|:--------|:------------|
+| **4 Modes** | daily / project / explore / low_energy (auto 23:00–07:00) |
+| **3-Layer Memory** | working (current focus) / short-term (14d decay) / long-term |
+| **FSRS v5** | Spaced repetition review cards + streak tracking |
+| **Reactive Skills** | YAML-defined feedback handlers (KG update / preference tuning / difficulty calibration) |
 
-## 目录结构
+---
+
+## 📂 Project Structure
 
 ```
-├── src/alice/
-│   ├── api/v1/           # 路由层（content / sources / pipeline / search / settings / feedback / dashboard / kg / connectors）
-│   ├── bot/              # Telegram bot（webhook + handlers）
-│   ├── config/           # Pydantic Settings + 评分权重配置
-│   ├── connectors/       # RSS + arXiv 数据源适配器
-│   ├── graph/            # Neo4j client / repository / subgraph extractor / user KG
-│   ├── llm/              # LLMClient 协议 + DeepSeek / Ollama / Mock 实现
-│   ├── models/           # SQLAlchemy 模型（content / source / user / feedback / review_card / user_memory）
-│   ├── pipeline/         # Celery 任务 + 调度器 + 编排器
-│   ├── schemas/          # Pydantic 请求/响应 schema
-│   ├── services/         # 业务逻辑层（20 个服务模块）
-│   ├── worker/           # Celery app 工厂 + legacy 兼容
-│   ├── db.py             # 异步 SQLAlchemy engine + session
-│   ├── main.py           # FastAPI 入口
-│   └── prompts.py        # Jinja2 prompt 加载
-├── prompts/              # LLM prompt 模板（*.j2）
-├── config/               # skills.yaml
-├── alembic/              # 数据库迁移（5 个版本）
-├── tests/
-│   ├── unit/             # 38 个单元测试模块
-│   ├── integration/      # 8 个集成测试模块
-│   └── fixtures/         # 测试数据（RSS / arXiv / LLM 响应）
-├── frontend/
-│   ├── src/app/          # Next.js pages
-│   ├── src/components/   # UI 组件（feed / content / dashboard / graph / settings / layout）
-│   ├── src/lib/          # API client / store / types
-│   └── e2e/              # Playwright E2E 测试
-├── docker-compose.yml
-├── Dockerfile            # 多阶段构建（Python 3.12-slim）
-├── Makefile
-└── pyproject.toml
+alice/
+├── 📄 pyproject.toml              # Python project config (uv + hatch)
+├── 🐳 docker-compose.yml          # 8-service orchestration
+├── 🐳 Dockerfile                  # Multi-stage build (Python 3.12-slim)
+├── 📄 Makefile                    # Dev command shortcuts
+├── 📄 alembic.ini                 # DB migration config
+│
+├── src/alice/                     # 🐍 Python backend
+│   ├── api/v1/                    #   9 router modules
+│   ├── bot/                       #   Telegram Bot (webhook + handlers)
+│   ├── config/                    #   Pydantic Settings + scoring weights
+│   ├── connectors/                #   RSS + arXiv source adapters
+│   ├── graph/                     #   Neo4j client / repo / subgraph extractor / user KG
+│   ├── llm/                       #   LLMClient protocol + DeepSeek / Ollama / Mock
+│   ├── models/                    #   SQLAlchemy models (6 core tables)
+│   ├── pipeline/                  #   Celery tasks + scheduler
+│   ├── schemas/                   #   Pydantic request / response schemas
+│   ├── services/                  #   19 business logic services
+│   ├── worker/                    #   Celery app factory + legacy compat
+│   ├── db.py                      #   Async SQLAlchemy engine + session
+│   ├── main.py                    #   FastAPI entry point
+│   └── prompts.py                 #   Jinja2 prompt template loader
+│
+├── prompts/                       # 📝 LLM prompt templates (*.j2)
+├── config/                        # ⚙️ skills.yaml
+├── alembic/versions/              # 🗃️ 6 database migration versions
+│
+├── tests/                         # 🧪 Tests
+│   ├── unit/                      #   37 unit test modules
+│   ├── integration/               #   8 integration test modules
+│   └── fixtures/                  #   Test data (RSS / arXiv / LLM responses)
+│
+└── frontend/                      # ⚛️ Next.js frontend
+    ├── src/app/                   #   7 page routes
+    ├── src/components/            #   UI components
+    ├── src/lib/                   #   API client / store / types
+    └── e2e/                       #   Playwright E2E tests
 ```
 
-## 快速开始
+---
 
-### 前置条件
+## 🚀 Getting Started
 
-- Docker & Docker Compose
-- Node.js ≥ 18
-- [uv](https://docs.astral.sh/uv/)（Python 包管理，可选：仅本机运行后端时需要）
+### Prerequisites
 
-### 1. 配置环境变量
+| Tool | Note |
+|:-----|:-----|
+| 🐳 Docker & Docker Compose | Required |
+| 📦 Node.js ≥ 18 | Frontend development |
+| 🐍 [uv](https://docs.astral.sh/uv/) | Python package manager (only needed for local backend dev) |
+
+### 1️⃣ Configure Environment Variables
 
 ```bash
 cp .env.example .env
 ```
 
-必须填写的变量：
+**Required variables:**
 
-| 变量 | 说明 |
-|------|------|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（Understanding + Scoring 必需） |
-| `TELEGRAM_BOT_TOKEN` | Telegram Bot Token（推送功能必需） |
-| `TELEGRAM_WEBHOOK_HOST` | Bot webhook 回调地址 |
+| Variable | Description |
+|:---------|:------------|
+| `DEEPSEEK_API_KEY` | DeepSeek API key (for Understanding + Scoring) |
+| `TELEGRAM_BOT_TOKEN` | Telegram Bot token (for push notifications) |
+| `TELEGRAM_WEBHOOK_HOST` | Bot webhook callback URL |
 
-其余变量有合理默认值，开发环境可直接使用。生产环境**务必替换**所有默认密钥。
+> 💡 All other variables have sensible defaults for development. **Make sure to replace all default secrets in production.**
 
-### 2. 启动服务
+### 2️⃣ Start Backend Services
 
-**方式 A：Docker 全栈（推荐）**
+<details>
+<summary><b>Option A: Full Docker Stack (Recommended)</b></summary>
 
 ```bash
-# 启动全部（含 Bot）
+# Start all services (including Bot)
 docker compose up -d
 
-# 或不含 Bot
+# Or without Bot
 docker compose up -d postgres redis meilisearch neo4j api worker scheduler
 
-# 执行数据库迁移
+# Run database migrations
 docker compose exec api alembic upgrade head
 ```
 
-**方式 B：基础设施 Docker + 本机运行 Python**
+</details>
+
+<details>
+<summary><b>Option B: Docker Infrastructure + Local Python</b></summary>
 
 ```bash
-# 基础设施
+# Start infrastructure
 docker compose up -d postgres redis meilisearch neo4j
 
-# Python 依赖 + 迁移
+# Install Python dependencies + run migrations
 uv sync --extra dev
 uv run alembic upgrade head
 
-# 分终端启动（4 个进程）
+# Start in separate terminals (4 processes)
 uv run uvicorn alice.main:app --host 0.0.0.0 --port 8000 --reload
-uv run celery -A alice.worker.celery_app worker --loglevel=info -Q celery,pipeline,fetch,push --pool=threads --concurrency=4
+uv run celery -A alice.worker.celery_app worker --loglevel=info \
+  -Q celery,pipeline,fetch,push --pool=threads --concurrency=4
 uv run celery -A alice.worker.celery_app beat --loglevel=info
-uv run python -m alice.bot.main   # 可选
+uv run python -m alice.bot.main   # optional
 ```
 
-### 3. 启动前端
+</details>
+
+### 3️⃣ Start Frontend
 
 ```bash
-cd frontend && npm install && npm run dev
+cd frontend
+npm install
+npm run dev
 ```
 
-访问 `http://localhost:3000/login`，输入 `ALICE_API_KEY`（默认 `alicesecret`）登录。
+Visit `http://localhost:3000/login` and enter your `ALICE_API_KEY` (default: `alicesecret`).
 
-### 4. 验证
+### 4️⃣ Verify
 
 ```bash
-# 健康检查
+# Health check
 curl http://localhost:8000/health
 
-# 添加数据源
+# Add a data source
 curl -X POST http://localhost:8000/api/v1/sources \
   -H "X-API-Key: alicesecret" \
   -H "Content-Type: application/json" \
-  -d '{"name":"HN","url":"https://hnrss.org/frontpage","type":"rss"}'
+  -d '{"name": "HN", "url": "https://hnrss.org/frontpage", "type": "rss"}'
 
-# 触发抓取
+# Trigger fetch
 curl -X POST http://localhost:8000/api/v1/pipeline/fetch/trigger \
   -H "X-API-Key: alicesecret"
 ```
 
-## API
+---
 
-所有 `/api/*` 路由需携带 `X-API-Key` 头。`/health`、`/docs`、`/openapi.json` 免鉴权。
+## 📡 API Reference
 
-| 模块 | 端点前缀 | 功能 |
-|------|----------|------|
-| Content | `/api/v1/content` | 内容列表 / 详情 / 删除 / 批量删除 |
-| Sources | `/api/v1/sources` | 数据源 CRUD |
-| Pipeline | `/api/v1/pipeline` | 状态查询 / 抓取触发 / 推送触发 / 重试 |
-| Search | `/api/v1/search` | 全文搜索 / 混合搜索 / 自动补全 |
-| Feedback | `/api/v1/feedback` | 用户反馈提交 |
-| Settings | `/api/v1/settings` | 推送偏好读写 |
-| Dashboard | `/api/v1/dashboard` | 认知仪表盘统计 |
-| KG | `/api/v1/kg` | 知识图谱查询 / 社区 / 缺口分析 / 编辑 |
-| Connectors | `/api/v1/connectors` | RSS 拉取调试 |
+All `/api/*` routes require an `X-API-Key` header. `/health`, `/docs`, `/openapi.json`, and `/redoc` are public.
 
-完整 API 文档：启动后访问 `http://localhost:8000/docs`。
+| Module | Endpoint Prefix | Description |
+|:-------|:----------------|:------------|
+| 📄 Content | `/api/v1/content` | List / detail / delete / batch delete |
+| 📡 Sources | `/api/v1/sources` | Data source CRUD |
+| 🔄 Pipeline | `/api/v1/pipeline` | Status / fetch trigger / push trigger / retry |
+| 🔍 Search | `/api/v1/search` | Full-text search / hybrid search / autocomplete |
+| 💬 Feedback | `/api/v1/feedback` | User feedback submission |
+| ⚙️ Settings | `/api/v1/settings` | Push preferences read/write |
+| 📊 Dashboard | `/api/v1/dashboard` | Cognitive dashboard statistics |
+| 🕸️ KG | `/api/v1/kg` | Knowledge graph queries / communities / gap analysis |
+| 🔌 Connectors | `/api/v1/connectors` | RSS fetch debugging |
 
-## 定时任务
+> 📖 Full interactive docs available at **http://localhost:8000/docs** after startup.
 
-| 任务 | 周期 | 队列 |
-|------|------|------|
-| 全量抓取 | 每 30 分钟 | fetch |
-| 推送调度 | 每 20 分钟 | push |
-| 失败重试 | 每 6 小时 | pipeline |
-| P_score 批量更新 | 每 24 小时 | pipeline |
+---
 
-各数据源还有独立的动态调度（基于 `fetch_interval_minutes` + 随机 jitter）。
+## ⏰ Scheduled Tasks
 
-## Status
-![Alt](https://repobeats.axiom.co/api/embed/804172554acbfa044e815782ff8c848bde477070.svg "Repobeats analytics image")
+| Task | Interval | Queue |
+|:-----|:---------|:------|
+| Full fetch | Every 30 min | `fetch` |
+| Push dispatch | Every 20 min | `push` |
+| Failed retry | Every 6 hours | `pipeline` |
+| P_score batch update | Every 24 hours | `pipeline` |
 
-## 测试
+> Each source also has its own dynamic schedule based on `fetch_interval_minutes` + random jitter.
+
+---
+
+## 🖥 Frontend Pages
+
+| Route | Description |
+|:------|:------------|
+| `/feed` | Infinite-scroll feed, grid/list views, batch actions, feedback |
+| `/search` | Full-text + hybrid search, autocomplete, filters |
+| `/content/[id]` | Magazine-style detail, AI summary + key-point cards, subgraph visualization |
+| `/dashboard` | Cognitive dashboard: learning velocity / knowledge growth / memory overview / FSRS review / community clusters |
+| `/dashboard/knowledge-graph` | Interactive knowledge graph visualization (React Flow) |
+| `/settings` | Source management / push preferences / schedule / user mode |
+| `/login` | API Key authentication |
+
+---
+
+## 🧪 Testing
+
+### Backend
 
 ```bash
-# 后端单元测试
+# Unit tests
 uv run pytest tests/unit -v
 
-# 后端集成测试（需先启动 Docker 基础设施）
+# Integration tests (requires Docker infrastructure)
 docker compose up -d
 uv run pytest tests/integration -m integration -v
 
-# 图谱集成测试（需 Neo4j + Ollama）
+# Graph integration tests (requires Neo4j + Ollama)
 TEST_DATABASE_URL="postgresql+asyncpg://alice:alice@localhost:5432/alice_test" \
 NEO4J_TEST_URI="bolt://localhost:7687" \
 NEO4J_TEST_USER="neo4j" \
 NEO4J_TEST_PASS="alice_neo4j" \
 uv run pytest tests/integration/test_phase2_integration.py -m integration -v
-
-# 前端单元测试
-cd frontend && npm run test
-
-# 前端 E2E
-cd frontend && npm run test:e2e
 ```
 
-## 命令速查
+### Frontend
 
 ```bash
-make up              # docker compose up -d
-make down            # docker compose down
-make test            # pytest 全量
-make test-phase2     # 图谱集成测试
-make lint            # ruff check
-make format          # ruff format
-make migrate         # alembic upgrade head
-make logs            # docker compose logs -f
-make clean           # 清除缓存文件
+cd frontend
+
+# Component / logic tests (Vitest)
+npm run test
+
+# E2E tests (Playwright)
+npm run test:e2e
 ```
 
-## 常见问题
+### Test Coverage Overview
 
-| 症状 | 解决 |
-|------|------|
-| `401 Invalid API key` | 请求缺少 `X-API-Key` 头或密钥与 `ALICE_API_KEY` 不一致 |
-| Schema mismatch | 运行 `make migrate` 或 `docker compose exec api alembic upgrade head` |
-| Search 503 | 检查 Meilisearch 服务状态：`curl http://localhost:7700/health` |
-| Pipeline 卡在 `fetched` | 确认 worker 进程已启动且监听 `pipeline` 队列 |
-| Bot 无响应 | 检查 `TELEGRAM_BOT_TOKEN` 和 `TELEGRAM_WEBHOOK_HOST` 配置 |
+| Layer | Scale | Notes |
+|:------|:------|:------|
+| Backend Unit | 37 modules, 300+ cases | Covers all services, connectors, graph, LLM, pipeline, bot |
+| Backend Integration | 8 modules | Real DB / graph deps enabled via env vars |
+| Frontend Unit | Vitest | Component and logic tests |
+| Frontend E2E | Playwright | Page-level end-to-end verification |
 
-## 已知技术债
+---
 
-- 部分集成测试仍使用 patch 隔离网络/Celery dispatch
-- Gatekeeper 在 Ollama 不可用时存在规则回退路径
-- `alice.worker.tasks` 保留 legacy 任务名兼容
-- 探索因子 ε 当前固定为 0.0
+## ⌨️ Cheat Sheet
+
+```bash
+make up              # 🐳 docker compose up -d
+make down            # 🐳 docker compose down
+make test            # 🧪 Run all pytest tests
+make test-phase2     # 🧪 Graph integration tests
+make lint            # 🔍 ruff check
+make format          # ✨ ruff format
+make migrate         # 🗃️ alembic upgrade head
+make logs            # 📋 docker compose logs -f
+make shell           # 🐍 Python REPL
+make clean           # 🧹 Remove cache files
+```
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><b><code>401 Invalid API key</code></b></summary>
+
+The request is missing the `X-API-Key` header, or the key doesn't match the `ALICE_API_KEY` environment variable. Default value is `alicesecret`.
+
+</details>
+
+<details>
+<summary><b>Schema mismatch / missing tables</b></summary>
+
+Run database migrations:
+
+```bash
+make migrate
+# or
+docker compose exec api alembic upgrade head
+```
+
+</details>
+
+<details>
+<summary><b>Search returns 503</b></summary>
+
+Check Meilisearch service health:
+
+```bash
+curl http://localhost:7700/health
+```
+
+</details>
+
+<details>
+<summary><b>Pipeline stuck at <code>fetched</code></b></summary>
+
+Verify the worker process is running and listening on the `pipeline` queue:
+
+```bash
+docker compose logs -f worker
+```
+
+</details>
+
+<details>
+<summary><b>Bot not responding</b></summary>
+
+Check that `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_HOST` are configured correctly. The bot requires a publicly accessible webhook URL.
+
+</details>
+
+---
+
+## ⚠️ Known Limitations
+
+> Current version is **0.1.0 Early Beta**. Known technical debt and limitations:
+
+| Category | Details |
+|:---------|:--------|
+| 🔒 Security | Default API key must be replaced in production; bot has no user authentication |
+| 🧪 Testing | Some integration tests still use patch isolation; frontend E2E coverage is thin |
+| 🤖 Gatekeeper | Falls back to rule-based filtering when Ollama is unavailable |
+| 🔗 Legacy | `alice.worker.tasks` retains legacy task name compatibility |
+| 📊 Ranking | Exploration factor ε is currently fixed at 0.0 |
+| 👥 Multi-user | Frontend currently hardcodes userId=1; multi-user support is WIP |
+| 🕸️ GraphRAG | Semantic search channel not yet implemented |
+
+> Full audit report available in `AUDIT_REPORT.md`
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|:---------|:------------|
+| 📖 [README.md](README.md) | This document — project overview and quickstart |
+| 🇨🇳 [README_ZH.md](README_ZH.md) | Chinese version of this document |
+| 🏗️ [DESIGN.md](DESIGN.md) | Technical design — architecture details and module design |
+| 🤝 [AGENTS.md](AGENTS.md) | Development conventions — engineering principles and code standards |
+| 🔍 [AUDIT_REPORT.md](AUDIT_REPORT.md) | Code audit report — tech debt and improvement suggestions |
+| 💡 [idea.md](idea.md) | Product vision — requirements draft and future roadmap |
+
+---
+
+## 📊 Status
+
+![Repobeats analytics](https://repobeats.axiom.co/api/embed/804172554acbfa044e815782ff8c848bde477070.svg "Repobeats analytics image")
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ using FastAPI · Next.js · Neo4j · DeepSeek</sub>
+</p>

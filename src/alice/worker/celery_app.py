@@ -61,6 +61,7 @@ def create_celery_app() -> Celery:
             "alice.pipeline.tasks.task_batch_update_p_scores": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_kg_feedback_update": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_push_batch": {"queue": "push"},
+            "alice.pipeline.tasks.task_schedule_push_batches": {"queue": "push"},
             # Legacy compatibility routes (old stub task names).
             "alice.worker.tasks.task_run_gatekeeper": {"queue": "pipeline"},
             "alice.worker.tasks.task_run_understanding": {"queue": "pipeline"},
@@ -85,6 +86,11 @@ def create_celery_app() -> Celery:
                 "task": "alice.pipeline.tasks.task_batch_update_p_scores",
                 "schedule": 86400.0,  # 24 hours
                 "options": {"queue": "pipeline"},
+            },
+            "schedule-push-batches": {
+                "task": "alice.pipeline.tasks.task_schedule_push_batches",
+                "schedule": 1200.0,  # 20 minutes
+                "options": {"queue": "push"},
             },
         },
         beat_schedule_filename="celerybeat-schedule",

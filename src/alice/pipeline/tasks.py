@@ -586,7 +586,7 @@ def task_kg_feedback_update(
     max_retries=3,
     retry_backoff=True,
 )
-def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5) -> dict:
+def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5, content_type_filter: str | None = None) -> dict:
     """Deliver a batch of indexed content to a Telegram user.
 
     Reads:  content.pipeline_status == 'indexed', pushed_at IS NULL
@@ -620,6 +620,7 @@ def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5) -> dict:
                     user_id=user_id,
                     limit=limit,
                     graph_client=graph_client,
+                    content_type_filter=content_type_filter,
                 )
             finally:
                 if graph_client:
@@ -653,5 +654,76 @@ def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5) -> dict:
                 extra={"user_id": user_id, "delivered": len(content_list)},
             )
             return {"user_id": user_id, "delivered": len(content_list)}
+
+    return asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# Scheduled push: respect PushScheduler per-user
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="alice.pipeline.tasks.task_schedule_push_batches",
+)
+def task_schedule_push_batches(self) -> dict:
+    """Periodic task: evaluate all users and dispatch push batches respecting schedule.
+
+    For each user:
+    1. Count how many items were pushed today.
+    2. Check ``PushScheduler.should_push_now()`` (quiet hours + frequency cap).
+    3. Determine the preferred ``content_type`` for the current time window.
+    4. Dispatch ``task_push_batch`` for eligible users.
+
+    Triggered by Celery Beat every 20 minutes.
+    """
+
+    async def _run() -> dict:
+        from datetime import UTC, datetime, timedelta  # noqa: PLC0415
+
+        from sqlalchemy import func, select  # noqa: PLC0415
+
+        from alice.models.content import Content  # noqa: PLC0415
+        from alice.models.user import User  # noqa: PLC0415
+        from alice.services.push_scheduler import PushScheduler  # noqa: PLC0415
+
+        now = datetime.now(UTC)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        scheduler = PushScheduler()
+        dispatched = 0
+        skipped = 0
+
+        async with AsyncSessionLocal() as session:
+            users = (await session.execute(select(User))).scalars().all()
+
+            for user in users:
+                # Count items pushed today (across all content for this single-user system)
+                count_result = await session.execute(
+                    select(func.count(Content.id)).where(
+                        Content.pushed_at >= today_start,
+                    )
+                )
+                pushes_today = count_result.scalar_one()
+
+                if not scheduler.should_push_now(now, pushes_today):
+                    skipped += 1
+                    continue
+
+                content_type = scheduler.get_content_type_for_window(now)
+                task_push_batch.delay(
+                    user.id,
+                    user.telegram_chat_id,
+                    5,  # default batch limit
+                    content_type,
+                )
+                dispatched += 1
+
+        logger.info(
+            "schedule_push_batches_complete",
+            extra={"dispatched": dispatched, "skipped": skipped},
+        )
+        return {"dispatched": dispatched, "skipped": skipped}
 
     return asyncio.run(_run())

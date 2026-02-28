@@ -18,6 +18,11 @@ BEAT_SCHEDULE = {
         "schedule": 86400.0,  # 24 hours
         "options": {"queue": "pipeline"},
     },
+    "schedule-push-batches": {
+        "task": "alice.pipeline.tasks.task_schedule_push_batches",
+        "schedule": 1200.0,  # 20 minutes
+        "options": {"queue": "push"},
+    },
 }
 
 

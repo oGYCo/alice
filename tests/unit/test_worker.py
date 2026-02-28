@@ -123,6 +123,8 @@ def test_beat_schedule_configured():
     assert schedule["retry-failed-every-6-hours"]["schedule"] == 21600.0
     assert "batch-update-p-scores-daily" in schedule
     assert schedule["batch-update-p-scores-daily"]["schedule"] == 86400.0
+    assert "schedule-push-batches" in schedule
+    assert schedule["schedule-push-batches"]["schedule"] == 1200.0
 
 
 def test_celery_serialization_json():

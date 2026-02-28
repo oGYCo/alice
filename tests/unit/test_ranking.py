@@ -153,6 +153,35 @@ class TestComputePScore:
         score = svc.compute_p_score(content, now=now)
         assert score <= 2.0
 
+    def test_compute_p_score_t_timing_zero_suppresses(self):
+        """t_timing=0.0 (quiet hours) should produce p_score=0.0."""
+        svc = RankingService()
+        now = datetime.now(UTC)
+        pub = now - timedelta(hours=1)
+        content = _make_content(quality_score=8.0, published_at=pub)
+        score = svc.compute_p_score(content, now=now, t_timing=0.0)
+        assert score == 0.0
+
+    def test_compute_p_score_t_timing_scales_linearly(self):
+        """t_timing=0.7 should scale the result relative to t_timing=1.0."""
+        svc = RankingService()
+        now = datetime.now(UTC)
+        pub = now - timedelta(hours=1)
+        content = _make_content(quality_score=8.0, published_at=pub)
+        score_full = svc.compute_p_score(content, now=now, t_timing=1.0)
+        score_off_peak = svc.compute_p_score(content, now=now, t_timing=0.7)
+        assert math.isclose(score_off_peak, score_full * 0.7, rel_tol=1e-6)
+
+    def test_compute_p_score_t_timing_none_defaults_to_one(self):
+        """t_timing=None (default) should behave identically to t_timing=1.0."""
+        svc = RankingService()
+        now = datetime.now(UTC)
+        pub = now - timedelta(hours=1)
+        content = _make_content(quality_score=8.0, published_at=pub)
+        score_default = svc.compute_p_score(content, now=now)
+        score_explicit = svc.compute_p_score(content, now=now, t_timing=1.0)
+        assert math.isclose(score_default, score_explicit, rel_tol=1e-9)
+
 
 # ---------------------------------------------------------------------------
 # _is_time_sensitive tests

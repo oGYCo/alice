@@ -18,6 +18,7 @@ from alice.prompts import PromptManager
 from alice.prompts import prompt_manager as _default_pm
 from alice.schemas.content import ContentResponseSchema
 from alice.services.matching import MatchingService
+from alice.services.push_scheduler import PushScheduler
 from alice.services.ranking import RankingService
 
 logger = structlog.get_logger(__name__)
@@ -39,6 +40,7 @@ class PushService:
         user_id: int,
         limit: int = 5,
         graph_client: GraphClient | None = None,
+        content_type_filter: str | None = None,
     ) -> list[Content]:
         """Return up to ``limit`` indexed, unpushed content items ranked by P_score.
 
@@ -48,7 +50,15 @@ class PushService:
         top-N results are returned.  When *graph_client* is ``None`` the
         pre-computed ``p_score`` ordering (falling back to ``quality_score``)
         is used directly.
+
+        *content_type_filter* narrows candidates to those whose
+        ``metadata_["content_type"]`` matches (ignored when ``"any"`` or
+        ``None``).
         """
+        push_scheduler = PushScheduler()
+        now = datetime.now(UTC)
+        t_timing = push_scheduler.get_timing_score(now)
+
         candidate_limit = limit * 3 if graph_client else limit
         result = await session.execute(
             select(Content)
@@ -60,6 +70,14 @@ class PushService:
             .limit(candidate_limit)
         )
         candidates = list(result.scalars().all())
+
+        # Apply content-type filter when a specific window is requested
+        if content_type_filter and content_type_filter != "any":
+            candidates = [
+                c
+                for c in candidates
+                if (c.metadata_ or {}).get("content_type") == content_type_filter
+            ] or candidates  # fall back to unfiltered if none match
 
         if not candidates or graph_client is None:
             return candidates[:limit]
@@ -75,7 +93,7 @@ class PushService:
                 r_relevance = await matching_svc.compute_r_relevance(user_id, subgraph)
             else:
                 r_relevance = 1.0
-            p = ranking_svc.compute_p_score(content, r_relevance=r_relevance)
+            p = ranking_svc.compute_p_score(content, r_relevance=r_relevance, t_timing=t_timing)
             scored.append((content, p))
 
         scored.sort(key=lambda x: x[1], reverse=True)

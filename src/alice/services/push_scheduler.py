@@ -46,6 +46,21 @@ class PushScheduler:
             return False
         return True
 
+    def get_timing_score(self, dt: datetime) -> float:
+        """Return a 0–1 score reflecting how favourable *dt* is for pushing.
+
+        * Quiet hours → 0.0  (suppress push entirely)
+        * Named time window (deep_knowledge / practical / thought_provoking /
+          exploration) → 1.0  (peak push time)
+        * Active but outside a named window ("any") → 0.7
+        """
+        if self.is_quiet_hours(dt):
+            return 0.0
+        window = self.get_content_type_for_window(dt)
+        if window == "any":
+            return 0.7
+        return 1.0
+
     def get_next_push_time(self, dt: datetime) -> datetime:
         """Return dt unchanged when active, or the next quiet_end boundary when quiet."""
         if not self.is_quiet_hours(dt):

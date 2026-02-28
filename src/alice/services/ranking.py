@@ -42,6 +42,7 @@ class RankingService:
         content: Content,
         now: datetime | None = None,
         r_relevance: float = 1.0,
+        t_timing: float | None = None,
     ) -> float:
         """Compute P_score for a single content item.
 
@@ -50,6 +51,10 @@ class RankingService:
         Args:
             r_relevance: KG-based relevance score from MatchingService (T32).
                          Defaults to 1.0 when matching is not available.
+            t_timing:    Schedule-window timing factor from PushScheduler.
+                         Defaults to ``None`` which falls back to 1.0 for
+                         backward compatibility.  Pass 0.0 during quiet hours
+                         to suppress the item entirely.
 
         Returns a float clamped to [0.0, 2.0].
         """
@@ -57,7 +62,8 @@ class RankingService:
             now = datetime.now(UTC)
 
         q_content = self._compute_q_content(content)
-        t_timing = 1.0  # Phase 3: user schedule window
+        if t_timing is None:
+            t_timing = 1.0
         d_decay = self._compute_d_decay(content, now)
         u_urgency = self._compute_u_urgency(content)
         epsilon_explore = 0.0  # Phase 4: eps-greedy

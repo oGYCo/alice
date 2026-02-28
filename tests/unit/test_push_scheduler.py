@@ -197,3 +197,52 @@ class TestGetNextPushTime:
         # Should be 7am on the same day (2026-02-23)
         assert result.hour == 7
         assert result.date() == dt.date()
+
+
+# ---------------------------------------------------------------------------
+# get_timing_score
+# ---------------------------------------------------------------------------
+
+
+class TestGetTimingScore:
+    def test_quiet_hours_returns_zero(self):
+        """During quiet hours (1am), timing score should be 0.0."""
+        sched = PushScheduler()
+        dt = datetime(2026, 2, 23, 1, 0)
+        assert sched.get_timing_score(dt) == 0.0
+
+    def test_quiet_boundary_returns_zero(self):
+        """At quiet start (23:00), timing score should be 0.0."""
+        sched = PushScheduler()
+        dt = datetime(2026, 2, 23, 23, 0)
+        assert sched.get_timing_score(dt) == 0.0
+
+    def test_named_window_returns_one(self):
+        """During a named window (9am weekday = deep_knowledge), score is 1.0."""
+        sched = PushScheduler()
+        dt = datetime(2026, 2, 23, 9, 0)  # Monday
+        assert sched.get_timing_score(dt) == 1.0
+
+    def test_afternoon_window_returns_one(self):
+        """During afternoon window (15:00 weekday = practical), score is 1.0."""
+        sched = PushScheduler()
+        dt = datetime(2026, 2, 24, 15, 0)  # Tuesday
+        assert sched.get_timing_score(dt) == 1.0
+
+    def test_evening_window_returns_one(self):
+        """During evening window (21:00 weekday = thought_provoking), score is 1.0."""
+        sched = PushScheduler()
+        dt = datetime(2026, 2, 25, 21, 0)  # Wednesday
+        assert sched.get_timing_score(dt) == 1.0
+
+    def test_weekend_returns_one(self):
+        """Weekend returns exploration window → score 1.0."""
+        sched = PushScheduler()
+        dt = datetime(2026, 2, 28, 10, 0)  # Saturday
+        assert sched.get_timing_score(dt) == 1.0
+
+    def test_off_peak_active_returns_0_7(self):
+        """Active hours but no named window (11am weekday) → score 0.7."""
+        sched = PushScheduler()
+        dt = datetime(2026, 2, 23, 11, 0)  # Monday
+        assert sched.get_timing_score(dt) == 0.7

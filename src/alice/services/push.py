@@ -84,13 +84,24 @@ class PushService:
         )
         candidates = list(result.scalars().all())
 
-        # Apply content-type filter when a specific window is requested
+        # Apply content-type filter when a specific window is requested.
+        # The scheduler uses window names (deep_knowledge, thought_provoking, practical)
+        # while the LLM generates content_type values (knowledge, thought, news).
+        # We map window names to sets of matching LLM content_types.
+        _WINDOW_TO_CONTENT_TYPES: dict[str, set[str]] = {
+            "deep_knowledge": {"knowledge", "deep_knowledge"},
+            "thought_provoking": {"thought", "thought_provoking", "opinion", "essay"},
+            "practical": {"knowledge", "deep_knowledge"},  # practical maps to knowledge
+            "exploration": set(),  # exploration = any type, handled below
+        }
         if content_type_filter and content_type_filter != "any":
-            candidates = [
-                c
-                for c in candidates
-                if (c.metadata_ or {}).get("content_type") == content_type_filter
-            ] or candidates  # fall back to unfiltered if none match
+            allowed_types = _WINDOW_TO_CONTENT_TYPES.get(content_type_filter)
+            if allowed_types:
+                candidates = [
+                    c
+                    for c in candidates
+                    if (c.metadata_ or {}).get("content_type") in allowed_types
+                ] or candidates  # fall back to unfiltered if none match
 
         if not candidates or graph_client is None:
             return candidates[:limit]
@@ -260,9 +271,6 @@ class PushService:
         ``push_enrichment.j2`` template.  Results are persisted to DB so
         subsequent pushes do not need to regenerate.
         """
-        import json
-        import re
-
         needs_commit = False
 
         for content in content_list:

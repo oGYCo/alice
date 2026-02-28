@@ -128,7 +128,7 @@ class RankingService:
         # Check metadata for explicit content_type marker
         metadata = cast(dict[str, object], content.metadata_ or {})
         content_type = str(metadata.get("content_type", ""))
-        return content_type in ("news", "time_sensitive")
+        return content_type in ("news", "time_sensitive", "release")
 
     def _compute_u_urgency(self, content: Content) -> float:
         """Return 1.5 for high-urgency content, else 1.0.

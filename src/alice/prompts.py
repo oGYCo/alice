@@ -59,6 +59,27 @@ class PromptManager:
             user_profile=user_profile,
         )
 
+    def render_push_enrichment(
+        self,
+        title: str,
+        summary: str,
+        key_points: list[str],
+        domains: list[str],
+        card_type: str,
+        language: str = "Chinese",
+        user_profile: str = "",
+    ) -> str:
+        return self.render(
+            "push_enrichment",
+            title=title,
+            summary=summary,
+            key_points=key_points,
+            domains=domains,
+            card_type=card_type,
+            language=language,
+            user_profile=user_profile,
+        )
+
 
 # Module-level singleton
 prompt_manager = PromptManager()

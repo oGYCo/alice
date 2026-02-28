@@ -418,3 +418,191 @@ class TestSendPushFallback:
         # Second call should NOT have parse_mode
         second_call_kwargs = bot.send_message.call_args_list[1][1]
         assert "parse_mode" not in second_call_kwargs
+
+
+# ---------------------------------------------------------------------------
+# enrich_push_metadata
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichPushMetadata:
+    """Tests for PushService.enrich_push_metadata()."""
+
+    async def test_enriches_missing_push_reason_for_deep_knowledge(self):
+        """Should generate push_reason and reading_advice for deep_knowledge content."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        content = _make_content(
+            id=1,
+            metadata_={"content_type": "knowledge"},
+            language="en",
+        )
+        llm_client = AsyncMock()
+        llm_client.complete = AsyncMock(
+            return_value='{"push_reason": "Covers cutting-edge attention mechanisms", "reading_advice": "Focus on the benchmark sections"}'
+        )
+
+        svc = PushService()
+        await svc.enrich_push_metadata([content], session, llm_client)
+
+        assert content.metadata_["push_reason"] == "Covers cutting-edge attention mechanisms"
+        assert content.metadata_["reading_advice"] == "Focus on the benchmark sections"
+        session.commit.assert_called_once()
+
+    async def test_enriches_what_impact_for_time_sensitive(self):
+        """Should generate what, impact, push_reason for time-sensitive content."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        content = _make_content(
+            id=2,
+            metadata_={"content_type": "news"},
+            language="zh",
+        )
+        llm_client = AsyncMock()
+        llm_client.complete = AsyncMock(
+            return_value='{"push_reason": "影响推理性能", "what": "vLLM发布v0.5.0", "impact": "推理吞吐量提升30%"}'
+        )
+
+        svc = PushService()
+        await svc.enrich_push_metadata([content], session, llm_client)
+
+        assert content.metadata_["what"] == "vLLM发布v0.5.0"
+        assert content.metadata_["impact"] == "推理吞吐量提升30%"
+        assert content.metadata_["push_reason"] == "影响推理性能"
+        session.commit.assert_called_once()
+
+    async def test_enriches_push_reason_for_thought_provoking(self):
+        """Should generate only push_reason for thought-provoking content."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        content = _make_content(
+            id=3,
+            metadata_={"content_type": "thought"},
+            language="en",
+        )
+        llm_client = AsyncMock()
+        llm_client.complete = AsyncMock(
+            return_value='{"push_reason": "Challenges conventional views on alignment"}'
+        )
+
+        svc = PushService()
+        await svc.enrich_push_metadata([content], session, llm_client)
+
+        assert content.metadata_["push_reason"] == "Challenges conventional views on alignment"
+        session.commit.assert_called_once()
+
+    async def test_skips_when_metadata_already_present(self):
+        """Should not call LLM when all push metadata fields are already populated."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        content = _make_content(
+            id=4,
+            metadata_={
+                "content_type": "knowledge",
+                "push_reason": "Already set",
+                "reading_advice": "Already set",
+            },
+        )
+        llm_client = AsyncMock()
+
+        svc = PushService()
+        await svc.enrich_push_metadata([content], session, llm_client)
+
+        llm_client.complete.assert_not_called()
+        session.commit.assert_not_called()
+
+    async def test_handles_llm_failure_gracefully(self):
+        """Should not crash when LLM call fails; enrichment is best-effort."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        content = _make_content(
+            id=5,
+            metadata_={"content_type": "knowledge"},
+            language="en",
+        )
+        llm_client = AsyncMock()
+        llm_client.complete = AsyncMock(side_effect=RuntimeError("LLM provider down"))
+
+        svc = PushService()
+        # Should not raise
+        await svc.enrich_push_metadata([content], session, llm_client)
+
+        # metadata_ should be unchanged (no push_reason added)
+        assert "push_reason" not in (content.metadata_ or {})
+
+    async def test_handles_invalid_json_response(self):
+        """Should handle non-JSON LLM responses gracefully."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        content = _make_content(
+            id=6,
+            metadata_={"content_type": "knowledge"},
+            language="en",
+        )
+        llm_client = AsyncMock()
+        llm_client.complete = AsyncMock(return_value="This is not JSON at all")
+
+        svc = PushService()
+        await svc.enrich_push_metadata([content], session, llm_client)
+
+        assert "push_reason" not in (content.metadata_ or {})
+
+    async def test_enriches_multiple_items(self):
+        """Should enrich multiple content items in one call."""
+        from alice.services.push import PushService
+
+        session = _make_session()
+        content1 = _make_content(id=10, metadata_={"content_type": "knowledge"}, language="en")
+        content2 = _make_content(id=11, metadata_={"content_type": "news"}, language="en")
+        llm_client = AsyncMock()
+        llm_client.complete = AsyncMock(
+            side_effect=[
+                '{"push_reason": "Reason 1", "reading_advice": "Advice 1"}',
+                '{"push_reason": "Reason 2", "what": "Something happened", "impact": "Big impact"}',
+            ]
+        )
+
+        svc = PushService()
+        await svc.enrich_push_metadata([content1, content2], session, llm_client)
+
+        assert content1.metadata_["push_reason"] == "Reason 1"
+        assert content2.metadata_["what"] == "Something happened"
+        assert llm_client.complete.call_count == 2
+
+
+class TestParseEnrichmentResponse:
+    """Tests for PushService._parse_enrichment_response()."""
+
+    def test_parses_plain_json(self):
+        from alice.services.push import PushService
+
+        result = PushService._parse_enrichment_response('{"push_reason": "hello"}')
+        assert result == {"push_reason": "hello"}
+
+    def test_parses_json_in_code_fence(self):
+        from alice.services.push import PushService
+
+        result = PushService._parse_enrichment_response(
+            '```json\n{"push_reason": "hello"}\n```'
+        )
+        assert result == {"push_reason": "hello"}
+
+    def test_returns_none_for_invalid_json(self):
+        from alice.services.push import PushService
+
+        result = PushService._parse_enrichment_response("not json")
+        assert result is None
+
+    def test_extracts_json_from_text(self):
+        from alice.services.push import PushService
+
+        result = PushService._parse_enrichment_response(
+            'Here is the result: {"push_reason": "hello"}'
+        )
+        assert result == {"push_reason": "hello"}

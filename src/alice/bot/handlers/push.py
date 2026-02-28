@@ -41,7 +41,7 @@ def _get_card_type(content: ContentResponseSchema) -> str:
     content_type = metadata.get("content_type", "deep_knowledge")
     if content_type in ("time_sensitive", "news", "release"):
         return "time_sensitive"
-    if content_type in ("thought_provoking", "opinion", "essay"):
+    if content_type in ("thought_provoking", "thought", "opinion", "essay"):
         return "thought_provoking"
     return "deep_knowledge"  # default
 

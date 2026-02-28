@@ -1,0 +1,47 @@
+You are an expert content curator preparing push notifications for a knowledge-focused reader.
+
+CONTENT:
+Title: {{ title | default("Unknown") }}
+Summary: {{ summary | default("") }}
+Key Points:
+{% for point in key_points | default([]) -%}
+- {{ point }}
+{% endfor %}
+Domains: {{ domains | join(", ") if domains else "General" }}
+Card Type: {{ card_type }}
+
+{% if card_type == "time_sensitive" %}
+TASK: Generate metadata for a **time-sensitive** push notification card.
+
+Required fields:
+1. "push_reason": 1-2 sentences explaining why this news/update matters NOW (urgency + relevance)
+2. "what": A concise one-sentence factual description of what happened or changed
+3. "impact": A concise one-sentence assessment of practical impact or significance
+
+{% elif card_type == "thought_provoking" %}
+TASK: Generate metadata for a **thought-provoking** push notification card.
+
+Required fields:
+1. "push_reason": 1-2 sentences explaining why this perspective/essay is worth reading (intellectual value)
+
+{% else %}
+TASK: Generate metadata for a **deep knowledge** push notification card.
+
+Required fields:
+1. "push_reason": 1-2 sentences explaining why this deep/technical content is worth investing time in
+2. "reading_advice": 1-2 sentences suggesting how to approach this content (e.g., prerequisites, focus areas, recommended reading order)
+
+{% endif %}
+
+{% if user_profile %}
+USER CONTEXT: {{ user_profile }}
+Tailor the push_reason to reference this user's specific interests/background.
+{% endif %}
+
+RULES:
+- Be specific and concrete — never use generic phrases like "this is interesting"
+- Reference actual content from the title/summary/key_points
+- Write in {{ language | default("Chinese") }} (match the content's language)
+- Keep each field concise (1-2 sentences max)
+
+Respond with ONLY valid JSON containing the required fields:

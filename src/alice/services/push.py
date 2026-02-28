@@ -32,8 +32,15 @@ logger = structlog.get_logger(__name__)
 class PushService:
     """Service for fetching, formatting, and delivering pushed content."""
 
-    def __init__(self, pm: PromptManager | None = None) -> None:
+    def __init__(
+        self,
+        pm: PromptManager | None = None,
+        push_scheduler: PushScheduler | None = None,
+        ranking_service: RankingService | None = None,
+    ) -> None:
         self._pm = pm or _default_pm
+        self._push_scheduler = push_scheduler or PushScheduler()
+        self._ranking_service = ranking_service or RankingService()
 
     # ------------------------------------------------------------------
     # Query
@@ -62,9 +69,8 @@ class PushService:
         ``metadata_["content_type"]`` matches (ignored when ``"any"`` or
         ``None``).
         """
-        push_scheduler = PushScheduler()
         now = datetime.now(UTC)
-        t_timing = push_scheduler.get_timing_score(now)
+        t_timing = self._push_scheduler.get_timing_score(now)
 
         candidate_limit = limit * 3 if graph_client else limit
         result = await session.execute(
@@ -138,7 +144,7 @@ class PushService:
 
         # Personalise with user-specific matching scores
         matching_svc = MatchingService(graph_client, search_service=search_service)
-        ranking_svc = RankingService()
+        graph_repo = GraphRepository(graph_client)
 
         # Apply user-mode push modifiers (daily/project/explore/low_energy)
         user_state_mgr = get_user_state_manager()
@@ -146,14 +152,16 @@ class PushService:
 
         scored: list[tuple[Content, float]] = []
         for content in candidates:
-            subgraph = await self._reconstruct_subgraph(graph_client, content.id)
+            subgraph = await self._reconstruct_subgraph(
+                graph_client, content.id, graph_repo=graph_repo,
+            )
             if subgraph:
                 r_relevance = await matching_svc.compute_r_relevance(
                     user_id, subgraph, content_id=content.id, session=session
                 )
             else:
                 r_relevance = 1.0
-            p = ranking_svc.compute_p_score(
+            p = self._ranking_service.compute_p_score(
                 content,
                 r_relevance=r_relevance,
                 t_timing=t_timing,
@@ -172,10 +180,12 @@ class PushService:
         self,
         graph_client: GraphClient,
         content_id: int,
+        *,
+        graph_repo: GraphRepository | None = None,
     ) -> ContentSubgraph | None:
         """Reconstruct a ``ContentSubgraph`` from Neo4j for matching."""
         try:
-            repo = GraphRepository(graph_client)
+            repo = graph_repo or GraphRepository(graph_client)
             data = await repo.get_content_subgraph(content_id)
             if not data["nodes"]:
                 return None
@@ -223,6 +233,126 @@ class PushService:
             )
         except Exception:
             logger.warning("subgraph_reconstruct_failed", content_id=content_id, exc_info=True)
+            return None
+
+    # ------------------------------------------------------------------
+    # Push metadata enrichment
+    # ------------------------------------------------------------------
+
+    def _resolve_card_type(self, content_type: str) -> str:
+        """Map content_type from metadata to card type (same logic as bot handler)."""
+        if content_type in ("time_sensitive", "news", "release"):
+            return "time_sensitive"
+        if content_type in ("thought_provoking", "thought", "opinion", "essay"):
+            return "thought_provoking"
+        return "deep_knowledge"
+
+    async def enrich_push_metadata(
+        self,
+        content_list: list[Content],
+        session: AsyncSession,
+        llm_client: LLMClient,
+    ) -> None:
+        """Generate missing push metadata (push_reason, what, impact, reading_advice).
+
+        For each content item, checks if push card fields are missing in
+        ``metadata_`` and generates them via a single LLM call using the
+        ``push_enrichment.j2`` template.  Results are persisted to DB so
+        subsequent pushes do not need to regenerate.
+        """
+        import json
+        import re
+
+        needs_commit = False
+
+        for content in content_list:
+            meta = dict(content.metadata_ or {})
+            raw_content_type = meta.get("content_type", "deep_knowledge")
+            card_type = self._resolve_card_type(raw_content_type)
+
+            # Determine which fields are needed but missing
+            missing_fields: list[str] = []
+            if not meta.get("push_reason"):
+                missing_fields.append("push_reason")
+            if card_type == "time_sensitive":
+                if not meta.get("what"):
+                    missing_fields.append("what")
+                if not meta.get("impact"):
+                    missing_fields.append("impact")
+            if card_type == "deep_knowledge":
+                if not meta.get("reading_advice"):
+                    missing_fields.append("reading_advice")
+
+            if not missing_fields:
+                continue
+
+            # Determine language from content
+            language = "Chinese" if (content.language or "").startswith("zh") else "English"
+
+            try:
+                prompt = self._pm.render_push_enrichment(
+                    title=content.title or "",
+                    summary=content.summary or "",
+                    key_points=content.key_points or [],
+                    domains=content.domains or [],
+                    card_type=card_type,
+                    language=language,
+                )
+                response = await llm_client.complete(prompt=prompt)
+                enrichment = self._parse_enrichment_response(response)
+
+                if enrichment:
+                    changed = False
+                    for field in missing_fields:
+                        value = enrichment.get(field)
+                        if value and isinstance(value, str) and value.strip():
+                            meta[field] = value.strip()
+                            changed = True
+                    if changed:
+                        content.metadata_ = meta
+                        needs_commit = True
+                        logger.info(
+                            "push_metadata_enriched",
+                            content_id=content.id,
+                            card_type=card_type,
+                            fields=[f for f in missing_fields if meta.get(f)],
+                        )
+            except Exception:
+                logger.warning(
+                    "push_metadata_enrichment_failed",
+                    content_id=content.id,
+                    exc_info=True,
+                )
+                # Enrichment is best-effort — continue to next item
+
+        if needs_commit:
+            await session.commit()
+
+    @staticmethod
+    def _parse_enrichment_response(response: str) -> dict | None:
+        """Parse LLM JSON response for push enrichment fields."""
+        import json
+        import re
+
+        text = response.strip()
+        # Strip markdown code fences
+        if text.startswith("```") and text.count("```") >= 2:
+            inner = text.split("```", 2)[1]
+            if "\n" in inner:
+                first_line, rest = inner.split("\n", 1)
+                text = rest.strip() if not first_line.strip().startswith("{") else inner.strip()
+            else:
+                text = inner.strip()
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group())
+                except json.JSONDecodeError:
+                    return None
             return None
 
     # ------------------------------------------------------------------

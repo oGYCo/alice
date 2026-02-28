@@ -4,8 +4,8 @@
 
 {{ title }}
 
-What: {{ what | default(summary) }}
-Impact: {{ impact | default("") }}
+What: {{ what or summary }}
+Impact: {{ impact or "No assessment yet" }}
 
 🔗 {{ source_url }}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -17,7 +17,7 @@ Impact: {{ impact | default("") }}
 
 {{ summary }}
 
-Push reason: {{ push_reason | default("") }}
+Push reason: {{ push_reason or "Relevant to your interests" }}
 
 🔗 Source: {{ source_url }}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -28,10 +28,10 @@ Push reason: {{ push_reason | default("") }}
 {{ title }}
 
 ┈┈ Summary ┈┈
-{{ summary | default("") }}
+{{ summary or "" }}
 
 ┈┈ Push Reason ┈┈
-{{ push_reason | default("") }}
+{{ push_reason or "Relevant to your interests" }}
 
 {% if key_points %}┈┈ Key Points ┈┈
 {% for point in key_points %}• {{ point }}

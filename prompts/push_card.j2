@@ -4,8 +4,8 @@
 
 {{ title }}
 
-What: {{ what | default(summary) }}
-Impact: {{ impact | default("") }}
+What: {{ what or summary }}
+Impact: {{ impact or "暂无评估" }}
 
 🔗 {{ source_url }}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -17,7 +17,7 @@ Impact: {{ impact | default("") }}
 
 {{ summary }}
 
-推送原因：{{ push_reason | default("") }}
+推送原因：{{ push_reason or "与你的关注领域相关" }}
 
 🔗 原文链接: {{ source_url }}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -28,10 +28,10 @@ Impact: {{ impact | default("") }}
 {{ title }}
 
 ┈┈ 核心内容 ┈┈
-{{ summary | default("") }}
+{{ summary or "" }}
 
 ┈┈ 推送原因 ┈┈
-{{ push_reason | default("") }}
+{{ push_reason or "与你的关注领域相关" }}
 
 {% if key_points %}┈┈ 关键要点 ┈┈
 {% for point in key_points %}• {{ point }}

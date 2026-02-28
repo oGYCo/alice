@@ -70,8 +70,8 @@ def test_push_reason_template_renders(pm):
 
 
 def test_all_templates_exist(pm):
-    """Test all 4 required templates exist."""
-    for template_name in ["gatekeeper", "understanding", "quality_score", "push_reason"]:
+    """Test all 5 required templates exist."""
+    for template_name in ["gatekeeper", "understanding", "quality_score", "push_reason", "push_enrichment"]:
         result = pm.render(
             template_name,
             title="test",
@@ -80,6 +80,7 @@ def test_all_templates_exist(pm):
             key_points=[],
             domains=[],
             source="",
+            card_type="deep_knowledge",
         )
         assert result is not None
         assert len(result) > 10
@@ -90,3 +91,46 @@ def test_template_render_with_unknown_raises():
     pm = PromptManager()
     with pytest.raises(jinja2.TemplateNotFound):
         pm.render("nonexistent_template")
+
+
+def test_push_enrichment_template_time_sensitive(pm):
+    """Test push enrichment template renders for time_sensitive content."""
+    result = pm.render_push_enrichment(
+        title="vLLM v0.5.0 Released",
+        summary="vLLM releases major version with 30% throughput improvement",
+        key_points=["30% faster", "New scheduler"],
+        domains=["AI", "infrastructure"],
+        card_type="time_sensitive",
+        language="English",
+    )
+    assert "what" in result
+    assert "impact" in result
+    assert "push_reason" in result
+    assert "time-sensitive" in result.lower()
+
+
+def test_push_enrichment_template_deep_knowledge(pm):
+    """Test push enrichment template renders for deep_knowledge content."""
+    result = pm.render_push_enrichment(
+        title="Understanding Transformers",
+        summary="A deep dive into transformer architecture",
+        key_points=["Self-attention", "Multi-head attention"],
+        domains=["machine learning"],
+        card_type="deep_knowledge",
+    )
+    assert "push_reason" in result
+    assert "reading_advice" in result
+
+
+def test_push_enrichment_template_thought_provoking(pm):
+    """Test push enrichment template renders for thought_provoking content."""
+    result = pm.render_push_enrichment(
+        title="The Future of AI Ethics",
+        summary="An essay on responsible AI development",
+        key_points=["Ethics frameworks"],
+        domains=["AI ethics"],
+        card_type="thought_provoking",
+    )
+    assert "push_reason" in result
+    # thought_provoking should NOT require reading_advice or what/impact
+    assert "what" not in result.lower().split("push_reason")[0]

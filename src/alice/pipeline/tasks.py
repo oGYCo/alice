@@ -750,6 +750,23 @@ def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5, content_ty
                 )
                 return {"user_id": user_id, "delivered": 0}
 
+            # Enrich push metadata (push_reason, what, impact, reading_advice)
+            # before delivery so the push cards have complete content.
+            if llm_client:
+                try:
+                    await svc.enrich_push_metadata(
+                        content_list=content_list,
+                        session=session,
+                        llm_client=llm_client,
+                    )
+                except Exception:
+                    logger.warning(
+                        "push_batch_enrichment_failed",
+                        extra={"user_id": user_id},
+                        exc_info=True,
+                    )
+                    # Enrichment is best-effort — deliver with whatever metadata exists
+
             try:
                 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
 

@@ -102,6 +102,24 @@ class TestGetCardType:
         result = _get_card_type(thought_provoking_schema)
         assert result == "thought_provoking"
 
+    def test_thought_maps_to_thought_provoking(self) -> None:
+        """content_type='thought' (from understanding LLM) → returns 'thought_provoking'."""
+        schema = _make_schema(
+            content_type="thought",
+            metadata_={"content_type": "thought"},
+        )
+        result = _get_card_type(schema)
+        assert result == "thought_provoking"
+
+    def test_news_maps_to_time_sensitive(self) -> None:
+        """content_type='news' (from understanding LLM) → returns 'time_sensitive'."""
+        schema = _make_schema(
+            content_type="news",
+            metadata_={"content_type": "news"},
+        )
+        result = _get_card_type(schema)
+        assert result == "time_sensitive"
+
 
 # ---------------------------------------------------------------------------
 # TestBuildPushCard

@@ -2,8 +2,6 @@
 
 <img src=".github/assets/banner.svg" width="100%" alt="Alice — AI 智能信息秘书" />
 
-个性化排序 · 知识图谱感知推送 · 反馈驱动持续进化
-
 <br/>
 
 [![Python](https://img.shields.io/badge/Python-≥3.12-3776AB?logo=python&logoColor=fff)](https://www.python.org/)

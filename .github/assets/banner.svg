@@ -82,31 +82,38 @@
   </g>
 
   <!-- Title: Alice -->
-  <text x="450" y="118" text-anchor="middle"
+  <text x="450" y="100" text-anchor="middle"
         font-family="'Segoe UI', 'SF Pro Display', 'Inter', system-ui, -apple-system, sans-serif"
         font-size="64" font-weight="300" letter-spacing="18" fill="white" filter="url(#textglow)">
     ALICE
   </text>
 
   <!-- Decorative divider -->
-  <line x1="330" y1="142" x2="570" y2="142" stroke="url(#accent)" stroke-width="1" opacity="0.35"/>
-  <circle cx="450" cy="142" r="2" fill="#a78bfa" opacity="0.5"/>
-  <circle cx="330" cy="142" r="1.2" fill="#818cf8" opacity="0.3"/>
-  <circle cx="570" cy="142" r="1.2" fill="#818cf8" opacity="0.3"/>
+  <line x1="330" y1="125" x2="570" y2="125" stroke="url(#accent)" stroke-width="1" opacity="0.35"/>
+  <circle cx="450" cy="125" r="2" fill="#a78bfa" opacity="0.5"/>
+  <circle cx="330" cy="125" r="1.2" fill="#818cf8" opacity="0.3"/>
+  <circle cx="570" cy="125" r="1.2" fill="#818cf8" opacity="0.3"/>
 
   <!-- Subtitle -->
-  <text x="450" y="176" text-anchor="middle"
+  <text x="450" y="157" text-anchor="middle"
         font-family="'Segoe UI', 'SF Pro Text', 'Inter', system-ui, -apple-system, sans-serif"
         font-size="14" font-weight="300" letter-spacing="6" fill="#c4b5fd" opacity="0.75">
     AI-POWERED INFORMATION SECRETARY
   </text>
 
+  <!-- Feature tagline -->
+  <text x="450" y="190" text-anchor="middle"
+        font-family="'Segoe UI', 'SF Pro Text', 'Inter', system-ui, -apple-system, sans-serif"
+        font-size="12" font-weight="300" letter-spacing="2" fill="#818cf8" opacity="0.55">
+    Personalized Ranking · Knowledge Graph Push · Feedback Loop
+  </text>
+
   <!-- Version badge -->
-  <g transform="translate(390, 196)">
-    <rect width="120" height="22" rx="11" fill="#818cf8" opacity="0.1" stroke="#818cf8" stroke-opacity="0.2" stroke-width="0.5"/>
-    <text x="60" y="15" text-anchor="middle"
+  <g transform="translate(400, 208)">
+    <rect width="100" height="20" rx="10" fill="#818cf8" opacity="0.08" stroke="#818cf8" stroke-opacity="0.15" stroke-width="0.5"/>
+    <text x="50" y="14" text-anchor="middle"
           font-family="'Segoe UI', 'SF Pro Text', 'Inter', system-ui, sans-serif"
-          font-size="10" font-weight="400" letter-spacing="2" fill="#a78bfa" opacity="0.7">
+          font-size="9" font-weight="400" letter-spacing="2" fill="#a78bfa" opacity="0.5">
       v0.1.0 BETA
     </text>
   </g>

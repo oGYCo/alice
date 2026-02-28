@@ -2,8 +2,6 @@
 
 <img src=".github/assets/banner.svg" width="100%" alt="Alice — AI-Powered Information Secretary" />
 
-personalized ranking · knowledge-graph-aware push · a feedback loop that learns
-
 <br/>
 
 [![Python](https://img.shields.io/badge/Python-≥3.12-3776AB?logo=python&logoColor=fff)](https://www.python.org/)

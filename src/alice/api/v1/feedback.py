@@ -113,6 +113,13 @@ async def create_feedback(
         feedback_type=body.feedback_type,
     )
 
+    # Dispatch skill-based feedback processing (non-blocking)
+    _dispatch_skill_execution(
+        user_id=body.user_id,
+        content_id=body.content_id,
+        feedback_type=body.feedback_type,
+    )
+
     return feedback
 
 
@@ -131,6 +138,16 @@ _KG_FEEDBACK_MAP: dict[str, str] = {
     "save_for_later": "save_for_later",
 }
 
+# Map frontend feedback types to SkillExecutor feedback types
+_SKILL_FEEDBACK_MAP: dict[str, str] = {
+    "positive": "positive_feedback",
+    "valuable_learned": "learned_new",
+    "negative": "negative_feedback",
+    "not_valuable": "negative_feedback",
+    "seen": "already_known",
+    "already_known": "already_known",
+}
+
 
 def _dispatch_kg_update(*, user_id: int, content_id: int, feedback_type: str) -> None:
     """Fire-and-forget Celery task to update user KG after feedback."""
@@ -145,6 +162,33 @@ def _dispatch_kg_update(*, user_id: int, content_id: int, feedback_type: str) ->
 
         structlog.get_logger(__name__).warning(
             "kg_update_dispatch_failed",
+            user_id=user_id,
+            content_id=content_id,
+            exc_info=True,
+        )
+
+
+def _dispatch_skill_execution(*, user_id: int, content_id: int, feedback_type: str) -> None:
+    """Fire-and-forget skill evaluation triggered by user feedback."""
+    skill_fb = _SKILL_FEEDBACK_MAP.get(feedback_type)
+    if not skill_fb:
+        return
+    try:
+        import asyncio  # noqa: PLC0415
+
+        from alice.services.skill_executor import SkillContext, SkillExecutor  # noqa: PLC0415
+
+        executor = SkillExecutor()
+        ctx = SkillContext(
+            user_id=user_id, content_id=content_id, feedback_type=skill_fb
+        )
+        loop = asyncio.get_running_loop()
+        loop.create_task(executor.execute_for_feedback(skill_fb, ctx))
+    except Exception:
+        import structlog  # noqa: PLC0415
+
+        structlog.get_logger(__name__).warning(
+            "skill_dispatch_failed",
             user_id=user_id,
             content_id=content_id,
             exc_info=True,

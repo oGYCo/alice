@@ -43,10 +43,11 @@ class RankingService:
         now: datetime | None = None,
         r_relevance: float = 1.0,
         t_timing: float | None = None,
+        user_mode_multiplier: float = 1.0,
     ) -> float:
         """Compute P_score for a single content item.
 
-        Formula: P_score = Q * R * T * D * U + eps
+        Formula: P_score = (Q * R * T * D * U + eps) * M
 
         Args:
             r_relevance: KG-based relevance score from MatchingService (T32).
@@ -55,6 +56,9 @@ class RankingService:
                          Defaults to ``None`` which falls back to 1.0 for
                          backward compatibility.  Pass 0.0 during quiet hours
                          to suppress the item entirely.
+            user_mode_multiplier: Mode-aware weight from UserStateManager
+                         PushModifiers.relevance_multiplier.  Defaults to 1.0
+                         (daily mode / no mode context).
 
         Returns a float clamped to [0.0, 2.0].
         """
@@ -69,6 +73,7 @@ class RankingService:
         epsilon_explore = 0.0  # Phase 4: eps-greedy
 
         p_score = q_content * r_relevance * t_timing * d_decay * u_urgency + epsilon_explore
+        p_score *= user_mode_multiplier
 
         # Clamp to [0.0, 2.0]; U_urgency=1.5 can push above 1.0
         return max(0.0, min(2.0, p_score))

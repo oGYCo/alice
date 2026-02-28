@@ -20,6 +20,7 @@ from alice.schemas.content import ContentResponseSchema
 from alice.services.matching import MatchingService
 from alice.services.push_scheduler import PushScheduler
 from alice.services.ranking import RankingService
+from alice.services.user_state import UserStateManager
 
 logger = structlog.get_logger(__name__)
 
@@ -86,6 +87,10 @@ class PushService:
         matching_svc = MatchingService(graph_client)
         ranking_svc = RankingService()
 
+        # Apply user-mode push modifiers (daily/project/explore/low_energy)
+        user_state_mgr = UserStateManager()
+        push_mods = user_state_mgr.get_push_modifiers(user_id)
+
         scored: list[tuple[Content, float]] = []
         for content in candidates:
             subgraph = await self._reconstruct_subgraph(graph_client, content.id)
@@ -93,7 +98,12 @@ class PushService:
                 r_relevance = await matching_svc.compute_r_relevance(user_id, subgraph)
             else:
                 r_relevance = 1.0
-            p = ranking_svc.compute_p_score(content, r_relevance=r_relevance, t_timing=t_timing)
+            p = ranking_svc.compute_p_score(
+                content,
+                r_relevance=r_relevance,
+                t_timing=t_timing,
+                user_mode_multiplier=push_mods.relevance_multiplier,
+            )
             scored.append((content, p))
 
         scored.sort(key=lambda x: x[1], reverse=True)

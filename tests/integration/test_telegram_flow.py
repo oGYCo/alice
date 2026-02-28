@@ -84,7 +84,13 @@ async def db_seed(engine):
         await conn.execute(text("SELECT setval('users_id_seq', 200000, true)"))
     yield
     async with engine.begin() as conn:
-        # Delete feedback first (FK depends on users and content), then users
+        # Delete child tables first (FK depends on users), then users
+        await conn.execute(
+            text(f"DELETE FROM review_cards WHERE user_id = ANY(ARRAY{user_ids})")
+        )
+        await conn.execute(
+            text(f"DELETE FROM user_memories WHERE user_id = ANY(ARRAY{user_ids})")
+        )
         await conn.execute(
             text(f"DELETE FROM feedback WHERE user_id = ANY(ARRAY{user_ids})")
         )

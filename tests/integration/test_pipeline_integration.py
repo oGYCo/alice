@@ -45,13 +45,18 @@ def configure_real_broker() -> None:
     settings.CELERY_BROKER_URL = TEST_REDIS_URL
     settings.REDIS_URL = TEST_REDIS_URL
 
-    # Close existing connections so the new broker URL takes full effect.
-    celery_app.close()
+    # Reconfigure broker URL and ensure connections are live.
     celery_app.conf.update(
         broker_url=TEST_REDIS_URL,
         result_backend=TEST_REDIS_URL,
         task_create_missing_queues=True,
     )
+    # Close stale connections so the next .delay() reconnects with the
+    # updated broker URL; then immediately warm up the pool so that the
+    # first test's .delay() does not race with lazy pool creation.
+    celery_app.close()
+    with celery_app.connection_for_write() as conn:
+        conn.default_channel  # force the underlying TCP connect
 
     client.flushdb()
     yield
@@ -61,13 +66,17 @@ def configure_real_broker() -> None:
 
 @pytest.fixture()
 def redis_client():
-    """Isolated Redis handle for queue length assertions."""
+    """Redis handle for queue length assertions.
+
+    Does NOT call flushdb() — the module-level ``configure_real_broker``
+    fixture handles that.  Per-test flushing would destroy kombu exchange
+    bindings, causing the first .delay() in each test to silently drop
+    the message.  Tests use a before/after delta to detect new messages.
+    """
     client = redis.Redis.from_url(TEST_REDIS_URL)
-    client.flushdb()
     try:
         yield client
     finally:
-        client.flushdb()
         client.close()
 
 

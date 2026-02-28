@@ -1,5 +1,7 @@
 """Tests for Celery worker infrastructure."""
 
+from unittest.mock import patch
+
 from alice.worker.celery_app import celery_app
 from alice.worker.tasks import (
     task_fetch_all_sources,
@@ -56,32 +58,36 @@ def test_tasks_are_registered():
         assert task_name in registered, f"Task {task_name} not registered"
 
 
-def test_task_gatekeeper_returns_stub():
-    """Test gatekeeper stub task returns expected shape."""
-    # Use .apply() for synchronous execution in tests (no broker needed)
-    result = task_run_gatekeeper.apply(args=[42])
-    assert result.result == {"content_id": 42, "stage": "gatekeeper", "status": "stub"}
+def test_task_gatekeeper_forwards_to_pipeline():
+    """Test gatekeeper legacy wrapper forwards to the real pipeline task."""
+    expected = {"content_id": 42, "stage": "gatekeeper", "passed": True}
+    with patch("alice.pipeline.tasks.task_run_gatekeeper", return_value=expected):
+        result = task_run_gatekeeper.apply(args=[42])
+    assert result.result == expected
 
 
-def test_task_understanding_returns_stub():
-    """Test understanding stub task returns expected shape."""
-    result = task_run_understanding.apply(args=[42])
+def test_task_understanding_forwards_to_pipeline():
+    """Test understanding legacy wrapper forwards to the real pipeline task."""
+    expected = {"content_id": 42, "stage": "understanding", "status": "ok"}
+    with patch("alice.pipeline.tasks.task_run_understanding", return_value=expected):
+        result = task_run_understanding.apply(args=[42])
     assert result.result["stage"] == "understanding"
-    assert result.result["status"] == "stub"
 
 
-def test_task_scoring_returns_stub():
-    """Test scoring stub task returns expected shape."""
-    result = task_run_scoring.apply(args=[42])
+def test_task_scoring_forwards_to_pipeline():
+    """Test scoring legacy wrapper forwards to the real pipeline task."""
+    expected = {"content_id": 42, "stage": "scoring", "status": "ok"}
+    with patch("alice.pipeline.tasks.task_run_scoring", return_value=expected):
+        result = task_run_scoring.apply(args=[42])
     assert result.result["stage"] == "scoring"
-    assert result.result["status"] == "stub"
 
 
-def test_task_indexing_returns_stub():
-    """Test indexing stub task returns expected shape."""
-    result = task_run_indexing.apply(args=[42])
+def test_task_indexing_forwards_to_pipeline():
+    """Test indexing legacy wrapper forwards to the real pipeline task."""
+    expected = {"content_id": 42, "stage": "indexing", "status": "ok"}
+    with patch("alice.pipeline.tasks.task_run_indexing", return_value=expected):
+        result = task_run_indexing.apply(args=[42])
     assert result.result["stage"] == "indexing"
-    assert result.result["status"] == "stub"
 
 
 def test_task_fetch_returns_summary():
@@ -99,12 +105,12 @@ def test_task_fetch_accepts_source_id_kwarg():
     assert result.result["requested_source_id"] == 7
 
 
-def test_task_push_batch_returns_stub():
-    """Test push batch task returns expected shape."""
+def test_task_push_batch_returns_error_without_chat_id():
+    """Legacy push batch returns error since chat_id is unavailable."""
     result = task_push_batch.apply(args=[123])
     assert result.result["user_id"] == 123
-    assert result.result["status"] == "stub"
-    assert "items_pushed" in result.result
+    assert result.result["status"] == "error"
+    assert "error" in result.result
 
 
 def test_celery_time_limits():

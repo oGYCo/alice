@@ -477,8 +477,8 @@ async def test_r_relevance_with_session_uses_working_memory() -> None:
 
     with patch(
         "alice.services.matching.MemoryManager"
-    ) as MockMemMgr:
-        mock_mgr_instance = MockMemMgr.return_value
+    ) as mock_mem_mgr:
+        mock_mgr_instance = mock_mem_mgr.return_value
         mock_mgr_instance.get_memory_context = AsyncMock(return_value=memory_ctx)
         r = await svc.compute_r_relevance(
             1, subgraph, session=mock_session
@@ -524,8 +524,8 @@ async def test_r_relevance_working_memory_boosts_matching_content() -> None:
 
     with patch(
         "alice.services.matching.MemoryManager"
-    ) as MockMemMgr:
-        mock_mgr_instance = MockMemMgr.return_value
+    ) as mock_mem_mgr:
+        mock_mgr_instance = mock_mem_mgr.return_value
         mock_mgr_instance.get_memory_context = AsyncMock(return_value=memory_ctx_match)
         r_with_memory = await svc_match.compute_r_relevance(
             1, subgraph, session=mock_session

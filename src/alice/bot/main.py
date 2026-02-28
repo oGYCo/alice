@@ -58,6 +58,24 @@ def create_app() -> web.Application:
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
 
+    # Auto-register webhook with Telegram on startup when TELEGRAM_WEBHOOK_HOST is set
+    async def _on_startup(_app: web.Application) -> None:
+        webhook_host = settings.TELEGRAM_WEBHOOK_HOST.rstrip("/")
+        if webhook_host:
+            webhook_url = f"{webhook_host}{WEBHOOK_PATH}"
+            await bot.set_webhook(webhook_url, drop_pending_updates=False)
+            logger.info("Webhook registered: %s", webhook_url)
+        else:
+            logger.warning("TELEGRAM_WEBHOOK_HOST not set — webhook not registered")
+
+    async def _on_shutdown(_app: web.Application) -> None:
+        await bot.delete_webhook()
+        await bot.session.close()
+        logger.info("Webhook deleted on shutdown")
+
+    app.on_startup.append(_on_startup)
+    app.on_shutdown.append(_on_shutdown)
+
     # Health check endpoint for Docker healthcheck
     async def health(_request: web.Request) -> web.Response:
         return web.json_response({"status": "ok"})

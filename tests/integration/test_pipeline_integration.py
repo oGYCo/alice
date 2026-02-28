@@ -45,20 +45,23 @@ def configure_real_broker() -> None:
     settings.CELERY_BROKER_URL = TEST_REDIS_URL
     settings.REDIS_URL = TEST_REDIS_URL
 
-    # Reconfigure broker URL and ensure connections are live.
+    # Flush BEFORE reconfiguring Celery.  The warm-up connection populates
+    # kombu's internal exchange-binding table cache (_table_cache) on the
+    # Channel.  If flushdb() runs AFTER that, the cached binding table
+    # becomes stale (Redis bindings deleted, cache says "declared"),
+    # causing subsequent .delay() calls to silently drop messages because
+    # the routing layer finds no matching queue bindings.
+    client.flushdb()
+
     celery_app.conf.update(
         broker_url=TEST_REDIS_URL,
         result_backend=TEST_REDIS_URL,
         task_create_missing_queues=True,
     )
-    # Close stale connections so the next .delay() reconnects with the
-    # updated broker URL; then immediately warm up the pool so that the
-    # first test's .delay() does not race with lazy pool creation.
+    # Close stale connection pools so the first .delay() creates a fresh
+    # connection that will re-declare exchange bindings in the clean Redis.
     celery_app.close()
-    with celery_app.connection_for_write() as conn:
-        conn.default_channel  # force the underlying TCP connect
 
-    client.flushdb()
     yield
     client.flushdb()
     client.close()

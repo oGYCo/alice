@@ -9,15 +9,23 @@ const NO_SIDEBAR_PATHS = ['/login'];
 
 export function ConditionalSidebar() {
     const pathname = usePathname();
-    const [hydrated, setHydrated] = useState(false);
+    const [storeReady, setStoreReady] = useState(false);
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
     useEffect(() => {
-        setHydrated(true);
+        const persist = useAuthStore.persist;
+        if (persist?.hasHydrated?.()) {
+            setStoreReady(true);
+            return;
+        }
+        const unsub = persist?.onFinishHydration?.(() => {
+            setStoreReady(true);
+        });
+        return () => { unsub?.(); };
     }, []);
 
     if (NO_SIDEBAR_PATHS.includes(pathname)) return null;
-    // Don't render sidebar until we know the user is authenticated
-    if (!hydrated || !isAuthenticated) return null;
+    // Don't render sidebar until persist has rehydrated and user is authenticated
+    if (!storeReady || !isAuthenticated) return null;
     return <Sidebar />;
 }

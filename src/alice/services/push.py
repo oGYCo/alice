@@ -88,14 +88,14 @@ class PushService:
         # The scheduler uses window names (deep_knowledge, thought_provoking, practical)
         # while the LLM generates content_type values (knowledge, thought, news).
         # We map window names to sets of matching LLM content_types.
-        _WINDOW_TO_CONTENT_TYPES: dict[str, set[str]] = {
+        window_to_content_types: dict[str, set[str]] = {
             "deep_knowledge": {"knowledge", "deep_knowledge"},
             "thought_provoking": {"thought", "thought_provoking", "opinion", "essay"},
             "practical": {"knowledge", "deep_knowledge"},  # practical maps to knowledge
             "exploration": set(),  # exploration = any type, handled below
         }
         if content_type_filter and content_type_filter != "any":
-            allowed_types = _WINDOW_TO_CONTENT_TYPES.get(content_type_filter)
+            allowed_types = window_to_content_types.get(content_type_filter)
             if allowed_types:
                 candidates = [
                     c

@@ -16,6 +16,11 @@ def _make_session_cm():
     """Return (cm, session) async context manager mock pair."""
     session = MagicMock()
     session.commit = AsyncMock()  # commit is awaited
+    session.flush = AsyncMock()   # flush is awaited
+    # execute returns an awaitable whose result has .scalar_one_or_none()
+    exec_result = MagicMock()
+    exec_result.scalar_one_or_none.return_value = True  # pretend user exists
+    session.execute = AsyncMock(return_value=exec_result)
     cm = MagicMock()
     cm.__aenter__ = AsyncMock(return_value=session)
     cm.__aexit__ = AsyncMock(return_value=False)

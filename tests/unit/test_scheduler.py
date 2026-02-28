@@ -41,19 +41,19 @@ def _make_source(**kwargs) -> MagicMock:
 class TestStaticBeatSchedule:
     def test_beat_schedule_has_fetch_all_sources(self):
         """BEAT_SCHEDULE must include the static fetch-all-sources entry."""
-        assert "fetch-all-sources" in BEAT_SCHEDULE
+        assert "fetch-all-sources-every-30-min" in BEAT_SCHEDULE
 
     def test_beat_schedule_fetch_interval_is_1800(self):
         """fetch-all-sources schedule should be 1800.0 seconds (30 min)."""
-        assert BEAT_SCHEDULE["fetch-all-sources"]["schedule"] == 1800.0
+        assert BEAT_SCHEDULE["fetch-all-sources-every-30-min"]["schedule"] == 1800.0
 
     def test_beat_schedule_has_retry_failed(self):
-        """BEAT_SCHEDULE must include retry-failed-content entry."""
-        assert "retry-failed-content" in BEAT_SCHEDULE
+        """BEAT_SCHEDULE must include retry-failed-every-6-hours entry."""
+        assert "retry-failed-every-6-hours" in BEAT_SCHEDULE
 
     def test_beat_schedule_retry_failed_is_6_hours(self):
-        """retry-failed-content schedule should be 21600.0 seconds (6 hours)."""
-        assert BEAT_SCHEDULE["retry-failed-content"]["schedule"] == 21600.0
+        """retry-failed-every-6-hours schedule should be 21600.0 seconds (6 hours)."""
+        assert BEAT_SCHEDULE["retry-failed-every-6-hours"]["schedule"] == 21600.0
 
     def test_beat_schedule_has_batch_p_scores(self):
         """BEAT_SCHEDULE must include batch-update-p-scores-daily entry."""
@@ -75,8 +75,8 @@ class TestStaticBeatSchedule:
         """get_beat_schedule() returns the static schedule dict."""
         schedule = get_beat_schedule()
         assert isinstance(schedule, dict)
-        assert "fetch-all-sources" in schedule
-        assert "retry-failed-content" in schedule
+        assert "fetch-all-sources-every-30-min" in schedule
+        assert "retry-failed-every-6-hours" in schedule
         assert "batch-update-p-scores-daily" in schedule
         assert "schedule-push-batches" in schedule
 
@@ -97,8 +97,8 @@ class TestGetDynamicSchedule:
 
         schedule = await get_dynamic_schedule(session)
 
-        assert "fetch-all-sources" in schedule
-        assert "retry-failed-content" in schedule
+        assert "fetch-all-sources-every-30-min" in schedule
+        assert "retry-failed-every-6-hours" in schedule
 
     async def test_dynamic_schedule_adds_per_source_entries(self):
         """Each active source gets its own Beat entry."""
@@ -170,9 +170,9 @@ class TestGetDynamicSchedule:
 
         schedule = await get_dynamic_schedule(session)
 
-        # 4 static entries: fetch-all-sources, retry-failed-content,
-        # batch-update-p-scores-daily, schedule-push-batches
-        assert len(schedule) == 4
+        # 5 static entries: fetch-all-sources-every-30-min, retry-failed-every-6-hours,
+        # batch-update-p-scores-daily, schedule-push-batches, retry-failed-graph-extractions-every-12-hours
+        assert len(schedule) == 5
 
     async def test_dynamic_schedule_source_entry_has_kwargs_with_source_id(self):
         """Per-source entry includes kwargs with source_id."""

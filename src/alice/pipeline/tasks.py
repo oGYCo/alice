@@ -175,15 +175,19 @@ def task_run_understanding(self, content_id: int) -> dict:
                     "understanding_error",
                     extra={"content_id": content_id, "error": str(exc)},
                 )
-                error_json = json.dumps(
-                    {
-                        "failure_reason": str(exc),
-                        "failed_at_stage": "understanding",
-                    }
-                )
-                await storage.update_pipeline_status(
-                    content_id, PipelineStatus.failed, error=error_json
-                )
+                # Only mark failed when retries are exhausted; otherwise
+                # the retry would find the content in 'failed' state instead
+                # of the expected 'gatekept' state.
+                if self.request.retries >= self.max_retries:
+                    error_json = json.dumps(
+                        {
+                            "failure_reason": str(exc),
+                            "failed_at_stage": "understanding",
+                        }
+                    )
+                    await storage.update_pipeline_status(
+                        content_id, PipelineStatus.failed, error=error_json
+                    )
                 raise self.retry(exc=exc)
 
             await storage.update_understanding(
@@ -794,10 +798,11 @@ def task_schedule_push_batches(self) -> dict:
             users = (await session.execute(select(User))).scalars().all()
 
             for user in users:
-                # Count items pushed today (across all content for this single-user system)
+                # Count items pushed today for THIS user
                 count_result = await session.execute(
                     select(func.count(Content.id)).where(
                         Content.pushed_at >= today_start,
+                        Content.user_id == user.id,
                     )
                 )
                 pushes_today = count_result.scalar_one()

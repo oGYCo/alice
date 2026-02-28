@@ -7,6 +7,7 @@ from celery.signals import setup_logging as celery_setup_logging
 from celery.signals import worker_process_init
 
 from alice.config import settings
+from alice.pipeline.scheduler import BEAT_SCHEDULE
 
 
 @celery_setup_logging.connect
@@ -89,34 +90,8 @@ def create_celery_app() -> Celery:
             "alice.worker.tasks.task_fetch_all_sources": {"queue": "fetch"},
             "alice.worker.tasks.task_push_batch": {"queue": "push"},
         },
-        # Beat schedule
-        beat_schedule={
-            "fetch-all-sources-every-30-min": {
-                "task": "alice.worker.tasks.task_fetch_all_sources",
-                "schedule": 1800.0,  # 30 minutes in seconds
-                "options": {"queue": "fetch"},
-            },
-            "retry-failed-every-6-hours": {
-                "task": "alice.pipeline.tasks.task_retry_failed",
-                "schedule": 21600.0,  # 6 hours
-                "options": {"queue": "pipeline"},
-            },
-            "batch-update-p-scores-daily": {
-                "task": "alice.pipeline.tasks.task_batch_update_p_scores",
-                "schedule": 86400.0,  # 24 hours
-                "options": {"queue": "pipeline"},
-            },
-            "schedule-push-batches": {
-                "task": "alice.pipeline.tasks.task_schedule_push_batches",
-                "schedule": 1200.0,  # 20 minutes
-                "options": {"queue": "push"},
-            },
-            "retry-failed-graph-extractions-every-12-hours": {
-                "task": "alice.pipeline.tasks.task_retry_failed_graph_extractions",
-                "schedule": 43200.0,  # 12 hours
-                "options": {"queue": "pipeline"},
-            },
-        },
+        # Beat schedule — single source of truth in pipeline.scheduler
+        beat_schedule=BEAT_SCHEDULE,
         beat_schedule_filename="celerybeat-schedule",
         timezone="UTC",
         # Result expiry

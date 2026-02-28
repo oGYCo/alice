@@ -301,7 +301,7 @@ class TestTaskRetryFailedGraphExtractions:
 
     def test_retry_graph_extraction_task_in_beat_schedule(self):
         """The beat schedule should contain the graph extraction retry task."""
-        from alice.worker.scheduler import get_beat_schedule
+        from alice.pipeline.scheduler import get_beat_schedule
 
         schedule = get_beat_schedule()
         assert "retry-failed-graph-extractions-every-12-hours" in schedule

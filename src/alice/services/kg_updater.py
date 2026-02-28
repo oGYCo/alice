@@ -109,7 +109,7 @@ class KGUpdater:
         result: KGUpdateResult,
     ) -> None:
         """Positive feedback: boost mastery +0.15, apply inferential boost to prerequisites."""
-        concepts = await self._get_content_concepts(content_id)
+        concepts = await self._get_content_concepts(user_id, content_id)
         if not concepts:
             return
 
@@ -120,7 +120,7 @@ class KGUpdater:
             result.mastery_changes[concept_name] = new_mastery
 
             # Inferential boost: prerequisites of the boosted concept
-            prereqs = await self._get_prerequisites(concept_name)
+            prereqs = await self._get_prerequisites(user_id, concept_name)
             for prereq_name, prereq_mastery in prereqs:
                 inferential_boost = _POSITIVE_BOOST * _INFERENTIAL_FACTOR
                 new_prereq_mastery = _clamp(prereq_mastery + inferential_boost)
@@ -136,7 +136,7 @@ class KGUpdater:
         result: KGUpdateResult,
     ) -> None:
         """Seen feedback: confirm mastery → 1.0 for all content concepts."""
-        concepts = await self._get_content_concepts(content_id)
+        concepts = await self._get_content_concepts(user_id, content_id)
         if not concepts:
             return
 
@@ -159,7 +159,7 @@ class KGUpdater:
         )
         content_summary = summary_rows[0]["summary"] if summary_rows else ""
 
-        concepts = await self._get_content_concepts(content_id)
+        concepts = await self._get_content_concepts(user_id, content_id)
 
         # LLM mismatch analysis (best-effort — don't fail if LLM errors)
         if content_summary:
@@ -196,7 +196,7 @@ class KGUpdater:
         result: KGUpdateResult,
     ) -> None:
         """Explain concept feedback: record knowledge gap, set mastery → 0.1."""
-        concepts = await self._get_content_concepts(content_id)
+        concepts = await self._get_content_concepts(user_id, content_id)
         if not concepts:
             return
 
@@ -207,31 +207,35 @@ class KGUpdater:
 
     # ── Private helpers ────────────────────────────────────────────────────────
 
-    async def _get_content_concepts(self, content_id: int) -> list[tuple[str, float]]:
+    async def _get_content_concepts(self, user_id: int, content_id: int) -> list[tuple[str, float]]:
         """Query Neo4j for concepts associated with a content item.
 
         Returns list of (concept_name, current_mastery) tuples.
-        If content node doesn't exist, returns empty list.
+        Mastery is read from the user-specific (User)-[KNOWS]->(Concept) relationship.
+        If the user has no KNOWS edge yet, defaults to 0.0.
         """
         rows = await self._client.execute_query(
             "MATCH (c:Content {id: $content_id})-[:DISCUSSES]->(concept) "
-            "RETURN concept.name AS name, concept.mastery AS mastery",
-            {"content_id": content_id},
+            "OPTIONAL MATCH (u:User {id: $user_id})-[r:KNOWS]->(concept) "
+            "RETURN concept.name AS name, r.mastery AS mastery",
+            {"content_id": content_id, "user_id": user_id},
         )
         return [
             (row["name"], float(row["mastery"]) if row["mastery"] is not None else 0.0)
             for row in rows
         ]
 
-    async def _get_prerequisites(self, concept_name: str) -> list[tuple[str, float]]:
-        """Return prerequisites of a concept with their current mastery values.
+    async def _get_prerequisites(self, user_id: int, concept_name: str) -> list[tuple[str, float]]:
+        """Return prerequisites of a concept with their current user-specific mastery values.
 
         Queries: (prereq)-[:PREREQUISITE_OF]->(concept).
+        Mastery is read from the (User)-[KNOWS]->(prereq) relationship.
         """
         rows = await self._client.execute_query(
             "MATCH (prereq:Concept)-[:PREREQUISITE_OF]->(c:Concept {name: $concept_name}) "
-            "RETURN prereq.name AS prereq_name, prereq.mastery AS mastery",
-            {"concept_name": concept_name},
+            "OPTIONAL MATCH (u:User {id: $user_id})-[r:KNOWS]->(prereq) "
+            "RETURN prereq.name AS prereq_name, r.mastery AS mastery",
+            {"concept_name": concept_name, "user_id": user_id},
         )
         return [
             (row["prereq_name"], float(row["mastery"]) if row["mastery"] is not None else 0.0)

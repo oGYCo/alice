@@ -91,59 +91,6 @@ Source → RSSConnector/ArxivConnector → store_raw (PG)
 
 ## 3. 严重发现（按优先级排序）
 
-### P1 — 短期必须修复
-
-#### 3.8 Pipeline 状态机在 retry 后不一致
-
-| 文件 | 问题 |
-|------|------|
-| [pipeline/tasks.py](src/alice/pipeline/tasks.py) | `task_run_understanding` 先将状态设为 `failed`，然后 `raise self.retry()` |
-
-当 Celery retry 触发时，DB 中状态已经是 `failed`。但 retry 的 task 会重新读取内容，此时需要的前置状态是 `gatekept`。如果有其他代码依赖 `pipeline_status == 'gatekept'` 来判断是否应该执行 understanding，retry 会被跳过。
-
-#### 3.9 三重冗余的 Beat Schedule
-
-| 文件 | 描述 |
-|------|------|
-| [worker/celery_app.py](src/alice/worker/celery_app.py) | 实际使用的 schedule（硬编码） |
-| [pipeline/scheduler.py](src/alice/pipeline/scheduler.py) | 相似但不同的 schedule 定义（死代码） |
-| [worker/scheduler.py](src/alice/worker/scheduler.py) | 另一份 schedule 定义（死代码） |
-
-三份独立维护的 schedule，只有 `celery_app.py` 中的实际生效。`task_retry_failed_graph_extractions` 只在 `celery_app.py` 中存在。**极易在修改时只更新一处导致不同步。**
-
-#### 3.10 推送计数未按 user_id 过滤
-
-| 文件 | 位置 |
-|------|------|
-| [pipeline/tasks.py](src/alice/pipeline/tasks.py) | `task_schedule_push_batches` |
-
-`Content.pushed_at >= today_start` 的 COUNT 没有 `WHERE user_id = ?` 过滤。多用户场景下，所有用户共享推送计数，当用户 A 的推送耗尽额度后，用户 B 也无法收到推送。
-
-#### 3.11 OllamaClient 每次请求创建新 HTTP 客户端
-
-| 文件 | 问题 |
-|------|------|
-| [llm/ollama.py](src/alice/llm/ollama.py) | `complete()` 和 `complete_structured()` 内部每次 `async with httpx.AsyncClient(...)` |
-
-无连接复用，每次 gatekeeper 评估都建立新 TCP 连接。在高吞吐场景下成为性能瓶颈。
-
-#### 3.12 KG Updater 查询全局 mastery 而非 user-specific
-
-| 文件 | 问题 |
-|------|------|
-| [services/kg_updater.py](src/alice/services/kg_updater.py) | `_get_content_concepts` 的 Cypher 查询 `concept.mastery` 是节点属性（全局），但 `update_mastery` 更新的是 `(User)-[KNOWS]->(Concept)` 关系上的 mastery（user-specific） |
-
-导致反馈处理时，增量计算基于错误的 baseline mastery。
-
-#### 3.13 前端 LoginPage 缺少 Suspense
-
-| 文件 | 问题 |
-|------|------|
-| [frontend/src/app/(auth)/login/page.tsx](frontend/src/app/(auth)/login/page.tsx) | `useSearchParams()` 在无 Suspense boundary 的 client component 中使用 |
-
-Next.js App Router 要求 `useSearchParams` 必须有 Suspense boundary，否则生产构建会报错。
-
----
 
 ### P2 — 中期技术债
 
@@ -230,7 +177,6 @@ Orchestrator 存在但未被使用，是死代码。
 |------|------|
 | [pipeline/orchestrator.py](src/alice/pipeline/orchestrator.py) | 整个 `advance_pipeline` 方法 |
 | [pipeline/scheduler.py](src/alice/pipeline/scheduler.py) | `get_dynamic_schedule()` 函数 |
-| [pipeline/scheduler.py](src/alice/pipeline/scheduler.py) + [worker/scheduler.py](src/alice/worker/scheduler.py) | 两个完整的 scheduler 模块（未被导入） |
 | [pipeline/tasks.py](src/alice/pipeline/tasks.py) | `_get_storage()` 和 `_fail_content()` helper |
 | [services/fsrs_engine.py](src/alice/services/fsrs_engine.py) | `get_due_cards_filter()` |
 | [services/user_state.py](src/alice/services/user_state.py) | `auto_detect_mode()` |
@@ -250,7 +196,7 @@ Orchestrator 存在但未被使用，是死代码。
 | `save_for_later` 反馈处理 | `kg_updater` 对此反馈类型直接 `pass` | 未实现 |
 | KG mismatch 分析结果 | `_adjust_preferences` 中 LLM 分析结果被丢弃 | 计算但未存储 |
 | 速率限制器集成 | `RateLimiter` 已定义但 `send_push` 未使用 | 实现未集成 |
-| 多用户支持 | 前端硬编码 `userId=1`，推送计数无 user_id 过滤 | 架构上支持但实现不完整 |
+| 多用户支持 | 前端硬编码 `userId=1`（推送计数 user_id 过滤已修复） | 架构上支持但前端实现不完整 |
 | Bot 用户鉴权 | 任何 Telegram 用户可使用 bot | 未实现 |
 
 ---
@@ -297,7 +243,7 @@ Orchestrator 存在但未被使用，是死代码。
 | # | 债项 | 位置 | 长期后果 |
 |---|------|------|------|
 | 4 | 推送编排每次 new instance | push.py | 6 个服务类每次调用重新实例化，性能差、状态不一致 |
-| 5 | 三重 schedule 冗余 | 3 个文件 | 修改时很容易遗漏导致行为不一致 |
+| ~~5~~ | ~~三重 schedule 冗余~~ | ~~3 个文件~~ | ✅ 已修复：统一到 pipeline/scheduler.py，删除 worker/scheduler.py |
 | 6 | 事务边界无统一契约 | services 层 | 新开发者容易引入数据一致性 bug |
 | 7 | URL 规范化三重实现 | 3 个文件 | 同一 URL 在不同路径可能被判为不同/相同 |
 
@@ -379,7 +325,7 @@ Orchestrator 存在但未被使用，是死代码。
 
 | # | 问题 | 影响 |
 |---|------|------|
-| 1 | Pipeline retry 后状态可能为 `failed` | 任务重试行为不可预测 |
+| ~~1~~ | ~~Pipeline retry 后状态可能为 `failed`~~ | ✅ 已修复 |
 | 2 | `deliver_push` 统一 commit | 中途失败导致已推的内容不标记 pushed_at |
 | 3 | `task_retry_failed` 无最大重试次数 | 永久失败的内容无限重试 |
 | 4 | 反馈不幂等 | 用户多次点击创建多条记录 |
@@ -403,22 +349,13 @@ Orchestrator 存在但未被使用，是死代码。
 
 ## 9. 可执行建议（按优先级）
 
-### 立即修复（本周）
-
-| # | 行动 | 工作量 | 影响 |
-|---|------|--------|------|
-| 5 | LoginPage 添加 Suspense boundary | 0.5h | 前端构建 |
-
 ### 短期修复（1-2 周）
 
 | # | 行动 | 工作量 | 影响 |
 |---|------|--------|------|
-| 9 | 统一 Beat Schedule 到单个来源（删除两个死 scheduler 文件） | 2h | 可维护性 |
 | 10 | `push.py` 的依赖注入重构（构造函数接收而非每次创建） | 3h | 性能+正确性 |
-| 11 | 修复 `task_run_understanding` retry 状态不一致 | 1h | 可靠性 |
 | 12 | 统一 URL 规范化到单个函数 | 2h | 一致性 |
 | 13 | 添加 `review_service` 单元测试 | 3h | 覆盖率 |
-| 14 | OllamaClient 使用持久化 httpx.AsyncClient | 1h | 性能 |
 
 ### 中期改进（1-2 月）
 
@@ -450,13 +387,13 @@ Orchestrator 存在但未被使用，是死代码。
 
 | 文件 | 问题数 | 最高严重性 |
 |------|--------|-----------|
-| [pipeline/tasks.py](src/alice/pipeline/tasks.py) | 8 | 🔴 P1 |
+| [pipeline/tasks.py](src/alice/pipeline/tasks.py) | 6 (-2) | 🟡 P2 |
 | [services/push.py](src/alice/services/push.py) | 4 | 🟡 P1 |
 | [llm/deepseek.py](src/alice/llm/deepseek.py) | 4 | 🟡 P1 |
-| [llm/ollama.py](src/alice/llm/ollama.py) | 5 | 🟡 P1 |
-| [worker/celery_app.py](src/alice/worker/celery_app.py) | 2 | 🟡 P1 |
+| [llm/ollama.py](src/alice/llm/ollama.py) | 3 (-2) | 🟡 P2 |
+| [worker/celery_app.py](src/alice/worker/celery_app.py) | 1 (-1) | 🟡 P2 |
 | [api/v1/dashboard.py](src/alice/api/v1/dashboard.py) | 5 | 🟡 P2 |
-| [services/kg_updater.py](src/alice/services/kg_updater.py) | 3 | 🟡 P2 |
+| [services/kg_updater.py](src/alice/services/kg_updater.py) | 1 (-2) | 🟡 P2 |
 | [services/matching.py](src/alice/services/matching.py) | 3 | 🟡 P2 |
 | [services/storage.py](src/alice/services/storage.py) | 4 | 🟡 P2 |
 | [services/graphrag_query.py](src/alice/services/graphrag_query.py) | 4 | 🟡 P2 |

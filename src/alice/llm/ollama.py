@@ -20,13 +20,26 @@ class OllamaClient:
         self._host = host.rstrip("/")
         self._model = model
         self._timeout = 60.0  # 60 second timeout for local model
+        # Persistent HTTP client — reuses TCP connections across requests
+        self._http: httpx.AsyncClient | None = None
+
+    def _get_http(self) -> httpx.AsyncClient:
+        """Return (and lazily create) the shared httpx.AsyncClient."""
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(timeout=self._timeout)
+        return self._http
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client, releasing connections."""
+        if self._http is not None and not self._http.is_closed:
+            await self._http.aclose()
+            self._http = None
 
     async def is_available(self) -> bool:
         """Check if Ollama server is reachable."""
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.get(f"{self._host}/api/tags")
-                return resp.status_code == 200
+            resp = await self._get_http().get(f"{self._host}/api/tags", timeout=5.0)
+            return resp.status_code == 200
         except Exception:
             return False
 
@@ -44,10 +57,9 @@ class OllamaClient:
             "stream": False,
             "options": {"temperature": temperature, "num_predict": max_tokens},
         }
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.post(f"{self._host}/api/generate", json=payload)
-            resp.raise_for_status()
-            return resp.json()["response"]
+        resp = await self._get_http().post(f"{self._host}/api/generate", json=payload)
+        resp.raise_for_status()
+        return resp.json()["response"]
 
     async def complete_structured(
         self,

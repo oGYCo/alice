@@ -17,12 +17,12 @@ from alice.models.source import Source
 # DB-driven schedule: reads active sources from DB, not hardcoded.
 # The fetch interval is configurable via the Source model's fetch_interval_minutes.
 BEAT_SCHEDULE = {
-    "fetch-all-sources": {
+    "fetch-all-sources-every-30-min": {
         "task": "alice.worker.tasks.task_fetch_all_sources",
         "schedule": 1800.0,  # 30 min
         "options": {"queue": "fetch"},
     },
-    "retry-failed-content": {
+    "retry-failed-every-6-hours": {
         "task": "alice.pipeline.tasks.task_retry_failed",
         "schedule": 21600.0,  # 6 hours
         "options": {"queue": "pipeline"},
@@ -36,6 +36,11 @@ BEAT_SCHEDULE = {
         "task": "alice.pipeline.tasks.task_schedule_push_batches",
         "schedule": 1200.0,  # 20 minutes
         "options": {"queue": "push"},
+    },
+    "retry-failed-graph-extractions-every-12-hours": {
+        "task": "alice.pipeline.tasks.task_retry_failed_graph_extractions",
+        "schedule": 43200.0,  # 12 hours
+        "options": {"queue": "pipeline"},
     },
 }
 

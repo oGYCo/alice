@@ -1,5 +1,8 @@
 import { test as base } from '@playwright/test';
 
+const BASE_URL = 'http://localhost:3000';
+const REAL_API_KEY = process.env.E2E_API_KEY ?? process.env.ALICE_API_KEY ?? 'alicesecret';
+
 /**
  * Extend the default Playwright test with authentication pre-configured.
  *
@@ -13,27 +16,29 @@ import { test as base } from '@playwright/test';
  */
 export const test = base.extend({
   page: async ({ page, context }, runWithPage) => {
-    // Cookie for the server-side middleware
+    // Cookie for server-side middleware auth checks.
     await context.addCookies([
       {
         name: 'alice-api-key',
-        value: 'test-api-key',
-        url: 'http://localhost:3000',
+        value: REAL_API_KEY,
+        domain: 'localhost',
+        path: '/',
+        sameSite: 'Lax',
       },
     ]);
 
-    // Seed localStorage before any application script executes.
-    // This avoids timing races where AuthGuard reads the default
-    // unauthenticated state and redirects to /login on slower machines.
-    await context.addInitScript(() => {
+    // Seed persisted Zustand auth state on a real same-origin page.
+    // This is more deterministic than relying only on addInitScript.
+    await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
+    await page.evaluate((apiKey) => {
       window.localStorage.setItem(
         'alice-auth',
         JSON.stringify({
-          state: { apiKey: 'test-api-key', isAuthenticated: true },
+          state: { apiKey, isAuthenticated: true },
           version: 0,
         }),
       );
-    });
+    }, REAL_API_KEY);
 
     await runWithPage(page);
   },

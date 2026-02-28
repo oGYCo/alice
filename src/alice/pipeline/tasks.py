@@ -396,10 +396,10 @@ def task_run_scoring(self, content_id: int) -> dict:
     retry_backoff=True,
 )
 def task_run_indexing(self, content_id: int) -> dict:
-    """Stage 4: Mark content as indexed (ready for delivery).
+    """Stage 4: Index content into Meilisearch and mark as indexed.
 
     Reads:  content.pipeline_status == 'scored'
-    Writes: content.pipeline_status = 'indexed'
+    Writes: Meilisearch document + content.pipeline_status = 'indexed'
     Next:   terminal — no further dispatch
     """
 
@@ -409,6 +409,24 @@ def task_run_indexing(self, content_id: int) -> dict:
             content = await storage.get_by_id(content_id)
             if content is None:
                 raise ValueError(f"Content {content_id} not found")
+
+            # Index into Meilisearch so the content is actually searchable
+            try:
+                from alice.config import settings as _settings  # noqa: PLC0415
+                from alice.services.search import SearchService  # noqa: PLC0415
+
+                search_service = SearchService(
+                    _settings.MEILISEARCH_URL, _settings.MEILISEARCH_API_KEY
+                )
+                search_service.index_content(content)
+            except Exception:
+                logger.warning(
+                    "indexing_meilisearch_failed",
+                    extra={"content_id": content_id},
+                    exc_info=True,
+                )
+                # Meilisearch indexing is best-effort — continue to mark as indexed
+                # so the pipeline is not blocked.
 
             try:
                 await storage.update_pipeline_status(content_id, PipelineStatus.indexed)

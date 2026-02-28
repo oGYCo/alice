@@ -164,3 +164,26 @@ async def delete_content_batch(
     # Best-effort: remove from Meilisearch
     search.delete_documents(body.ids)
     return {"deleted": count}
+
+
+@router.post("/admin/reindex-search", status_code=200)
+async def reindex_search(
+    svc: ContentStorageService = Depends(_get_storage),
+    search: SearchService = Depends(_get_search),
+) -> dict[str, int]:
+    """Admin: rebuild the Meilisearch index for all indexed content.
+
+    Iterates over all content items with pipeline_status='indexed' and
+    (re-)indexes them into Meilisearch.  Returns the count of documents
+    submitted to the index.
+    """
+    search.ensure_index()
+    items = await svc.get_pending(PipelineStatus.indexed, limit=5000)
+    indexed = 0
+    for item in items:
+        try:
+            search.index_content(item)
+            indexed += 1
+        except Exception:
+            pass  # best-effort: skip items that fail
+    return {"indexed": indexed}

@@ -111,6 +111,19 @@ def orchestrator(content_svc):
     return PipelineOrchestrator(content_svc)
 
 
+def _count_dispatched(client: redis.Redis) -> int:
+    """Count Celery tasks pending in Redis.
+
+    The kombu Redis transport may store dispatched messages in the named
+    queue list (e.g. 'pipeline') OR in the 'unacked' hash (broker-side
+    acknowledgement tracking).  We check both to be transport-version
+    agnostic.
+    """
+    queued = client.llen("pipeline")
+    unacked = client.hlen("unacked")
+    return queued + unacked
+
+
 async def _create_test_content(content_svc: ContentStorageService, suffix: str) -> Content:
     """Create a test content item and return it."""
     raw = RawContentSchema(
@@ -131,13 +144,13 @@ async def test_advance_pipeline_gatekeeper_passed_enqueues_understanding(
     content = await _create_test_content(content_svc, "gatekeeper_pass")
     assert content.pipeline_status == PipelineStatus.fetched
 
-    before = redis_client.llen("pipeline")
+    before = _count_dispatched(redis_client)
     await orchestrator.advance_pipeline(content.id, "gatekeeper", {"passed": True})
-    after = redis_client.llen("pipeline")
+    after = _count_dispatched(redis_client)
 
     assert after == before + 1, (
-        f"Expected 'pipeline' queue length {before + 1}, got {after}. "
-        f"Redis keys after dispatch: {[k.decode() for k in redis_client.keys('*')]}"
+        f"Expected dispatched task count {before + 1}, got {after}. "
+        f"Redis keys: {[k.decode() for k in redis_client.keys('*')]}"
     )
     refreshed = await content_svc.get_by_id(content.id)
     assert refreshed is not None
@@ -147,7 +160,7 @@ async def test_advance_pipeline_gatekeeper_passed_enqueues_understanding(
 async def test_advance_pipeline_gatekeeper_failed_no_dispatch(orchestrator, content_svc, redis_client):
     """Failing gatekeeper marks failed and should not enqueue next stage."""
     content = await _create_test_content(content_svc, "gatekeeper_fail")
-    before = redis_client.llen("pipeline")
+    before = _count_dispatched(redis_client)
 
     await orchestrator.advance_pipeline(
         content.id,
@@ -155,7 +168,7 @@ async def test_advance_pipeline_gatekeeper_failed_no_dispatch(orchestrator, cont
         {"passed": False, "reason": "Content does not meet quality threshold"},
     )
 
-    after = redis_client.llen("pipeline")
+    after = _count_dispatched(redis_client)
     assert after == before
 
     refreshed = await content_svc.get_by_id(content.id)
@@ -198,13 +211,13 @@ async def test_advance_pipeline_understood_enqueues_scoring(orchestrator, conten
     """Advancing from understood should enqueue scoring task on Redis."""
     content = await _create_test_content(content_svc, "understood")
 
-    before = redis_client.llen("pipeline")
+    before = _count_dispatched(redis_client)
     await orchestrator.advance_pipeline(content.id, "understood", {})
-    after = redis_client.llen("pipeline")
+    after = _count_dispatched(redis_client)
 
     assert after == before + 1, (
-        f"Expected 'pipeline' queue length {before + 1}, got {after}. "
-        f"Redis keys after dispatch: {[k.decode() for k in redis_client.keys('*')]}"
+        f"Expected dispatched task count {before + 1}, got {after}. "
+        f"Redis keys: {[k.decode() for k in redis_client.keys('*')]}"
     )
 
 
@@ -213,9 +226,9 @@ async def test_advance_pipeline_indexed_terminal_state(orchestrator, content_svc
     content = await _create_test_content(content_svc, "indexed_terminal")
     await content_svc.update_pipeline_status(content.id, PipelineStatus.scored)
 
-    before = redis_client.llen("pipeline")
+    before = _count_dispatched(redis_client)
     await orchestrator.advance_pipeline(content.id, "indexed", {})
-    after = redis_client.llen("pipeline")
+    after = _count_dispatched(redis_client)
 
     assert after == before
     refreshed = await content_svc.get_by_id(content.id)

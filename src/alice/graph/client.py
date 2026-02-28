@@ -19,6 +19,37 @@ class _Logger(Protocol):
 logger = cast(_Logger, structlog.get_logger(__name__))
 
 
+# ── Edge ID helpers ────────────────────────────────────────────────────────────
+# Use '::' as separator so concept names containing '-' won't break parsing.
+EDGE_ID_SEP = "::"
+
+
+def make_edge_id(source: str, relation: str, target: str) -> str:
+    """Build a deterministic edge identifier: source::RELATION::target."""
+    return f"{source}{EDGE_ID_SEP}{relation}{EDGE_ID_SEP}{target}"
+
+
+def parse_edge_id(edge_id: str) -> tuple[str, str, str]:
+    """Parse an edge ID into (source, relation, target).
+
+    Raises ValueError if the format is invalid.
+    Supports both new '::' separator and legacy '-' separator for backward compat.
+    """
+    if EDGE_ID_SEP in edge_id:
+        parts = edge_id.split(EDGE_ID_SEP)
+        if len(parts) != 3:
+            raise ValueError(f"Invalid edge_id format: {edge_id!r}")
+        return parts[0], parts[1], parts[2]
+
+    # Legacy format: 'source-RELATION_TYPE-target' (split from right to handle names with -)
+    # Heuristic: relation types are UPPER_SNAKE_CASE
+    import re
+    match = re.match(r'^(.+?)-([A-Z_]+)-(.+)$', edge_id)
+    if not match:
+        raise ValueError(f"Invalid edge_id format: {edge_id!r}")
+    return match.group(1), match.group(2), match.group(3)
+
+
 class GraphClient:
     """Async Neo4j driver wrapper with connection pool and schema bootstrap."""
 
@@ -45,6 +76,10 @@ class GraphClient:
 
     async def __aexit__(self, *_: object) -> None:
         await self.close()
+
+    @property
+    def connected(self) -> bool:
+        return self._driver is not None
 
     async def health_check(self) -> bool:
         """Return True if Neo4j is reachable."""
@@ -75,3 +110,27 @@ class GraphClient:
         for stmt in SCHEMA_STATEMENTS:
             await self.execute_query(stmt)
         logger.info("neo4j_schema_ensured", statements=len(SCHEMA_STATEMENTS))
+
+
+# ── Application-wide singleton ─────────────────────────────────────────────────
+_shared_client: GraphClient | None = None
+
+
+async def get_shared_graph_client(uri: str, auth: tuple[str, str]) -> GraphClient:
+    """Return (and lazily create) a shared GraphClient singleton.
+
+    Call close_shared_graph_client() on shutdown.
+    """
+    global _shared_client
+    if _shared_client is None or not _shared_client.connected:
+        _shared_client = GraphClient(uri, auth)
+        await _shared_client.connect()
+    return _shared_client
+
+
+async def close_shared_graph_client() -> None:
+    """Gracefully close the shared client on application shutdown."""
+    global _shared_client
+    if _shared_client is not None:
+        await _shared_client.close()
+        _shared_client = None

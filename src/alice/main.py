@@ -48,8 +48,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Meilisearch may not be ready yet; startup should not fail.
         import structlog
         structlog.get_logger(__name__).warning("meilisearch_ensure_index_failed_on_startup")
+
+    # Pre-warm shared Neo4j connection pool (non-fatal on failure).
+    try:
+        from alice.graph.client import get_shared_graph_client
+        neo4j_user, neo4j_password = settings.NEO4J_AUTH.split("/", 1)
+        client = await get_shared_graph_client(
+            settings.NEO4J_URI, (neo4j_user, neo4j_password),
+        )
+        await client.ensure_schema()
+    except Exception:
+        import structlog
+        structlog.get_logger(__name__).warning("neo4j_shared_client_init_failed_on_startup")
+
     yield
-    # (shutdown hooks can go here in the future)
+
+    # Shutdown: close shared Neo4j driver gracefully
+    try:
+        from alice.graph.client import close_shared_graph_client
+        await close_shared_graph_client()
+    except Exception:
+        pass
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):

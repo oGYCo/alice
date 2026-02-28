@@ -17,6 +17,12 @@ const mockEdges: KGEdge[] = [
     { id: 'Information Theory-EXTENDS-Attention Mechanism', source: 'Information Theory', target: 'Attention Mechanism', label: 'EXTENDS' },
 ];
 
+const mockAllNodes: KGNode[] = [
+    mockNode,
+    { id: 'Transformer', name: 'Transformer', label: 'Method', mastery: 0.6, community_id: 0, aliases: [] },
+    { id: 'Information Theory', name: 'Information Theory', label: 'Theory', mastery: 0.4, community_id: 1, aliases: [] },
+];
+
 describe('NodeEditor', () => {
     const onClose = vi.fn();
     const onUpdateMastery = vi.fn();
@@ -29,6 +35,7 @@ describe('NodeEditor', () => {
             <NodeEditor
                 node={mockNode}
                 edges={mockEdges}
+                allNodes={mockAllNodes}
                 onClose={onClose}
                 onUpdateMastery={onUpdateMastery}
                 onRenameNode={onRenameNode}
@@ -50,7 +57,7 @@ describe('NodeEditor', () => {
 
     it('displays concept type badge', () => {
         renderEditor();
-        expect(screen.getByText('Concept')).toBeDefined();
+        expect(screen.getByText(/Concept/)).toBeDefined();
     });
 
     it('displays aliases', () => {
@@ -73,7 +80,10 @@ describe('NodeEditor', () => {
 
     it('shows edge count', () => {
         renderEditor();
-        expect(screen.getByText(/关系 \(2\)/)).toBeDefined();
+        // The section label '关系' contains the count as child text
+        const labels = screen.getAllByText('关系', { exact: false });
+        const edgeLabel = labels.find((el) => el.textContent?.includes('(2)'));
+        expect(edgeLabel).toBeDefined();
     });
 
     it('calls onClose when close button is clicked', () => {

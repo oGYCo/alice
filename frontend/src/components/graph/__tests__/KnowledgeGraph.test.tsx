@@ -21,6 +21,11 @@ vi.mock('@xyflow/react', () => {
         Panel,
         Handle: () => null,
         Position: { Top: 'top', Bottom: 'bottom', Left: 'left', Right: 'right' },
+        Background: () => null,
+        BackgroundVariant: { Dots: 'dots', Lines: 'lines', Cross: 'cross' },
+        MarkerType: { Arrow: 'arrow', ArrowClosed: 'arrowclosed' },
+        MiniMap: () => null,
+        Controls: () => null,
         useNodesState: (initial: unknown[]) => {
             const { useState } = require('react');
             const [nodes, setNodes] = useState(initial);
@@ -117,8 +122,11 @@ describe('KnowledgeGraph', () => {
     it('shows node count and edge count stats', async () => {
         render(<KnowledgeGraph />);
         await waitFor(() => {
-            expect(screen.getByText('4 个概念')).toBeDefined();
-            expect(screen.getByText('2 个关系')).toBeDefined();
+            // Stats are now shown as separate spans: count + label
+            expect(screen.getByText('4')).toBeDefined();
+            expect(screen.getByText('概念')).toBeDefined();
+            expect(screen.getByText('2')).toBeDefined();
+            expect(screen.getByText('关系')).toBeDefined();
         });
     });
 
@@ -152,7 +160,7 @@ describe('KnowledgeGraph', () => {
         render(<KnowledgeGraph />);
         await waitFor(() => {
             expect(screen.getByTestId('empty-graph')).toBeDefined();
-            expect(screen.getByText('暂无知识图谱数据')).toBeDefined();
+            expect(screen.getByText('尚无知识图谱')).toBeDefined();
         });
     });
 
@@ -160,7 +168,7 @@ describe('KnowledgeGraph', () => {
         getKGGraph.mockRejectedValue(new Error('Neo4j unavailable'));
         render(<KnowledgeGraph />);
         await waitFor(() => {
-            expect(screen.getByText('加载失败')).toBeDefined();
+            expect(screen.getByText('知识图谱加载失败')).toBeDefined();
             expect(screen.getByText('重试')).toBeDefined();
         });
     });

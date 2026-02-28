@@ -106,6 +106,10 @@ async def create_feedback(
     await session.commit()
     await session.refresh(feedback)
 
+    # Create FSRS review cards for positive feedback (valuable_learned)
+    if feedback_type == FeedbackType.valuable_learned:
+        await _create_review_cards(session, body.user_id, body.content_id)
+
     # Dispatch async KG update (non-blocking)
     _dispatch_kg_update(
         user_id=body.user_id,
@@ -189,6 +193,27 @@ def _dispatch_skill_execution(*, user_id: int, content_id: int, feedback_type: s
 
         structlog.get_logger(__name__).warning(
             "skill_dispatch_failed",
+            user_id=user_id,
+            content_id=content_id,
+            exc_info=True,
+        )
+
+
+async def _create_review_cards(
+    session: AsyncSession, user_id: int, content_id: int
+) -> None:
+    """Best-effort creation of FSRS review cards from content concepts."""
+    try:
+        from alice.services.review_service import ReviewCardService  # noqa: PLC0415
+
+        svc = ReviewCardService(session)
+        await svc.create_cards_from_content(user_id, content_id)
+        await session.commit()
+    except Exception:
+        import structlog  # noqa: PLC0415
+
+        structlog.get_logger(__name__).warning(
+            "review_card_creation_failed",
             user_id=user_id,
             content_id=content_id,
             exc_info=True,

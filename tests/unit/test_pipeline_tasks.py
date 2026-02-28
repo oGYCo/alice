@@ -13,6 +13,7 @@ from alice.pipeline.tasks import (
     task_run_indexing,
     task_run_scoring,
     task_run_understanding,
+    task_retry_failed_graph_extractions,
 )
 
 # ---------------------------------------------------------------------------
@@ -288,3 +289,22 @@ class TestTaskRetryFailed:
 
         registered = celery_app.tasks.keys()
         assert "alice.pipeline.tasks.task_retry_failed" in registered
+
+
+class TestTaskRetryFailedGraphExtractions:
+    def test_retry_graph_extraction_task_registered(self):
+        """task_retry_failed_graph_extractions must be registered with Celery."""
+        from alice.worker.celery_app import celery_app
+
+        registered = celery_app.tasks.keys()
+        assert "alice.pipeline.tasks.task_retry_failed_graph_extractions" in registered
+
+    def test_retry_graph_extraction_task_in_beat_schedule(self):
+        """The beat schedule should contain the graph extraction retry task."""
+        from alice.worker.scheduler import get_beat_schedule
+
+        schedule = get_beat_schedule()
+        assert "retry-failed-graph-extractions-every-12-hours" in schedule
+        entry = schedule["retry-failed-graph-extractions-every-12-hours"]
+        assert entry["task"] == "alice.pipeline.tasks.task_retry_failed_graph_extractions"
+        assert entry["schedule"] == 43200.0

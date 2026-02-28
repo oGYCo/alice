@@ -78,6 +78,7 @@ def create_celery_app() -> Celery:
             "alice.pipeline.tasks.task_retry_failed": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_batch_update_p_scores": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_kg_feedback_update": {"queue": "pipeline"},
+            "alice.pipeline.tasks.task_retry_failed_graph_extractions": {"queue": "pipeline"},
             "alice.pipeline.tasks.task_push_batch": {"queue": "push"},
             "alice.pipeline.tasks.task_schedule_push_batches": {"queue": "push"},
             # Legacy compatibility routes (old stub task names).
@@ -109,6 +110,11 @@ def create_celery_app() -> Celery:
                 "task": "alice.pipeline.tasks.task_schedule_push_batches",
                 "schedule": 1200.0,  # 20 minutes
                 "options": {"queue": "push"},
+            },
+            "retry-failed-graph-extractions-every-12-hours": {
+                "task": "alice.pipeline.tasks.task_retry_failed_graph_extractions",
+                "schedule": 43200.0,  # 12 hours
+                "options": {"queue": "pipeline"},
             },
         },
         beat_schedule_filename="celerybeat-schedule",

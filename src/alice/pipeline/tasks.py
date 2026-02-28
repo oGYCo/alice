@@ -493,6 +493,70 @@ def task_retry_failed(self) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Maintenance: retry failed graph extractions
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(
+    bind=True,
+    name="alice.pipeline.tasks.task_retry_failed_graph_extractions",
+)
+def task_retry_failed_graph_extractions(self) -> dict:
+    """Periodic task: retry graph extraction for content where it previously failed.
+
+    Finds content with ``graph_extraction_failed`` flag in ``metadata_``,
+    clears the failure marker, and re-dispatches ``task_run_graph_extraction``.
+    This runs as a standalone retry — it does NOT re-trigger scoring because
+    the content is already scored/indexed.
+
+    Triggered by Celery Beat every 12 hours.
+    """
+
+    async def _run() -> dict:
+        from sqlalchemy import select  # noqa: PLC0415
+
+        from alice.models.content import Content  # noqa: PLC0415
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(Content).where(
+                    Content.pipeline_status.in_([
+                        PipelineStatus.scored,
+                        PipelineStatus.indexed,
+                    ])
+                ).limit(100)
+            )
+            items = list(result.scalars().all())
+
+            retry_ids: list[int] = []
+            for item in items:
+                meta = dict(item.metadata_ or {})
+                if not meta.get("graph_extraction_failed"):
+                    continue
+
+                # Clear failure markers so re-extraction can proceed cleanly
+                meta.pop("graph_extraction_failed", None)
+                meta.pop("graph_extraction_error", None)
+                item.metadata_ = meta
+                retry_ids.append(item.id)
+
+            if retry_ids:
+                await session.commit()
+
+        # Dispatch extraction tasks after session is committed
+        for cid in retry_ids:
+            task_run_graph_extraction.delay(cid)
+
+        logger.info(
+            "retry_failed_graph_extractions_complete",
+            extra={"retried": len(retry_ids)},
+        )
+        return {"retried": len(retry_ids)}
+
+    return asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
 # Maintenance: batch update p_scores for indexed content
 # ---------------------------------------------------------------------------
 
@@ -611,10 +675,25 @@ def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5, content_ty
 
     from alice.config import settings
     from alice.services.push import PushService
+    from alice.services.search import SearchService  # noqa: PLC0415
 
     async def _run() -> dict:
         async with AsyncSessionLocal() as session:
             svc = PushService()
+
+            # Build optional search + LLM dependencies for GraphRAG candidate discovery
+            search_service: SearchService | None = None
+            llm_client = None
+            try:
+                search_service = SearchService(
+                    settings.MEILISEARCH_URL, settings.MEILISEARCH_API_KEY
+                )
+                llm_client = create_llm_client("deepseek")
+            except Exception:
+                logger.warning(
+                    "push_batch_search_unavailable",
+                    extra={"user_id": user_id},
+                )
 
             # Attempt to personalise push with KG matching (graceful degradation)
             graph_client = None
@@ -635,6 +714,8 @@ def task_push_batch(self, user_id: int, chat_id: int, limit: int = 5, content_ty
                     limit=limit,
                     graph_client=graph_client,
                     content_type_filter=content_type_filter,
+                    search_service=search_service,
+                    llm_client=llm_client,
                 )
             finally:
                 if graph_client:

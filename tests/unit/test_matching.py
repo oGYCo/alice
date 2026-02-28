@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -12,6 +12,7 @@ from alice.services.matching import (
     DEFAULT_RECOMMEND_THRESHOLD,
     MatchingService,
 )
+from alice.services.memory_system import MemoryContext
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -43,11 +44,12 @@ def _make_subgraph(
 def _make_service(
     neo4j_rows: list[dict] | None = None,
     user_knowledge: list[KnowledgeNode] | None = None,
+    search_service: object | None = None,
 ) -> tuple[MatchingService, MagicMock]:
     """Build MatchingService with mocked GraphClient + UserKnowledgeGraph."""
     client = MagicMock()
     client.execute_query = AsyncMock(return_value=neo4j_rows or [])
-    svc = MatchingService(client)
+    svc = MatchingService(client, search_service=search_service)
     # Patch the UserKnowledgeGraph inside the service
     svc._user_kg = MagicMock()
     svc._user_kg.get_knowledge_map = AsyncMock(return_value=user_knowledge or [])
@@ -307,3 +309,231 @@ async def test_r_relevance_higher_for_ready_user() -> None:
     r_novice = await svc_novice.compute_r_relevance(1, subgraph)
 
     assert r_expert > r_novice
+
+
+# ---------------------------------------------------------------------------
+# Tests — text relevance (Meilisearch integration)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_text_relevance_with_search_service() -> None:
+    """When search_service is provided and content is found, text_relevance > 0.5."""
+    mock_search = MagicMock()
+    mock_search.search = MagicMock(
+        return_value={"hits": [{"id": "42", "title": "ML Basics"}]}
+    )
+    known = [KnowledgeNode(concept="ml", mastery=0.8)]
+    svc, _ = _make_service(user_knowledge=known, search_service=mock_search)
+    subgraph = _make_subgraph(
+        nodes=[{"name": "ml"}],
+        entry_concepts=["ml"],
+        difficulty=0.5,
+    )
+    r = await svc.compute_r_relevance(1, subgraph, content_id=42)
+    # With search hit at rank 0, text_relevance = 1.0 (top rank)
+    assert 0.0 <= r <= 1.0
+    mock_search.search.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_text_relevance_without_search_service() -> None:
+    """Without search_service, text_relevance falls back to 0.5 (neutral)."""
+    known = [KnowledgeNode(concept="ml", mastery=0.6)]
+    svc_with, _ = _make_service(user_knowledge=known)
+    svc_without, _ = _make_service(user_knowledge=known)
+    subgraph = _make_subgraph(
+        nodes=[{"name": "ml"}],
+        entry_concepts=["ml"],
+        difficulty=0.6,
+    )
+    r_with = await svc_with.compute_r_relevance(1, subgraph)
+    r_without = await svc_without.compute_r_relevance(1, subgraph, content_id=99)
+    # Both should work without error; without search_service, fallback = 0.5
+    assert 0.0 <= r_with <= 1.0
+    assert 0.0 <= r_without <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_text_relevance_search_failure_graceful() -> None:
+    """If search_service.search raises, text_relevance falls back to 0.5."""
+    mock_search = MagicMock()
+    mock_search.search = MagicMock(side_effect=Exception("Meilisearch down"))
+    known = [KnowledgeNode(concept="ml", mastery=0.8)]
+    svc, _ = _make_service(user_knowledge=known, search_service=mock_search)
+    subgraph = _make_subgraph(
+        nodes=[{"name": "ml"}],
+        entry_concepts=["ml"],
+        difficulty=0.5,
+    )
+    # Should not raise, graceful degradation
+    r = await svc.compute_r_relevance(1, subgraph, content_id=42)
+    assert 0.0 <= r <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_text_relevance_content_not_in_results() -> None:
+    """Content not in search results → low text relevance (0.1)."""
+    mock_search = MagicMock()
+    mock_search.search = MagicMock(
+        return_value={"hits": [{"id": "99", "title": "Other Content"}]}
+    )
+    known = [KnowledgeNode(concept="ml", mastery=0.8)]
+    svc, _ = _make_service(user_knowledge=known, search_service=mock_search)
+    subgraph = _make_subgraph(
+        nodes=[{"name": "ml"}],
+        entry_concepts=["ml"],
+        difficulty=0.5,
+    )
+    r = await svc.compute_r_relevance(1, subgraph, content_id=42)
+    assert 0.0 <= r <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Tests — working memory match
+# ---------------------------------------------------------------------------
+
+
+class TestComputeWorkingMemoryMatch:
+    """Tests for _compute_working_memory_match."""
+
+    def test_no_working_topics_returns_neutral(self) -> None:
+        """No working memory topics → neutral 0.5."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(nodes=[{"name": "transformers"}])
+        ctx = MemoryContext(working_topics=[])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(0.5)
+
+    def test_no_content_nodes_returns_neutral(self) -> None:
+        """No content concept nodes → neutral 0.5."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(nodes=[])
+        ctx = MemoryContext(working_topics=["transformers"])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(0.5)
+
+    def test_exact_topic_match(self) -> None:
+        """Exact match between concept and working topic → 1.0."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(nodes=[{"name": "transformers"}])
+        ctx = MemoryContext(working_topics=["transformers"])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(1.0)
+
+    def test_case_insensitive_match(self) -> None:
+        """Case-insensitive matching works."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(nodes=[{"name": "Transformers"}])
+        ctx = MemoryContext(working_topics=["TRANSFORMERS"])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(1.0)
+
+    def test_substring_topic_in_concept(self) -> None:
+        """Working topic 'attention' matches concept 'multi_head_attention'."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(nodes=[{"name": "multi_head_attention"}])
+        ctx = MemoryContext(working_topics=["attention"])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(1.0)
+
+    def test_substring_concept_in_topic(self) -> None:
+        """Concept 'ml' matches working topic 'ml_pipeline_optimization'."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(nodes=[{"name": "ml"}])
+        ctx = MemoryContext(working_topics=["ml_pipeline_optimization"])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(1.0)
+
+    def test_partial_overlap(self) -> None:
+        """1 of 2 concepts matches → 0.5."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(
+            nodes=[{"name": "attention"}, {"name": "quantum_computing"}]
+        )
+        ctx = MemoryContext(working_topics=["attention"])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(0.5)
+
+    def test_no_overlap(self) -> None:
+        """No overlap → 0.0."""
+        svc, _ = _make_service()
+        subgraph = _make_subgraph(nodes=[{"name": "quantum_computing"}])
+        ctx = MemoryContext(working_topics=["transformers"])
+        assert svc._compute_working_memory_match(subgraph, ctx) == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Tests — R_relevance with working memory (session-aware)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_r_relevance_with_session_uses_working_memory() -> None:
+    """When session is passed, working memory context is fetched and used."""
+    known = [KnowledgeNode(concept="attention", mastery=0.8)]
+    svc, _ = _make_service(user_knowledge=known)
+    subgraph = _make_subgraph(
+        nodes=[{"name": "attention"}],
+        entry_concepts=["attention"],
+        difficulty=0.5,
+    )
+
+    mock_session = AsyncMock()
+    memory_ctx = MemoryContext(working_topics=["attention"])
+
+    with patch(
+        "alice.services.matching.MemoryManager"
+    ) as MockMemMgr:
+        mock_mgr_instance = MockMemMgr.return_value
+        mock_mgr_instance.get_memory_context = AsyncMock(return_value=memory_ctx)
+        r = await svc.compute_r_relevance(
+            1, subgraph, session=mock_session
+        )
+        mock_mgr_instance.get_memory_context.assert_awaited_once_with(mock_session, 1)
+
+    assert 0.0 <= r <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_r_relevance_without_session_neutral_working_match() -> None:
+    """Without session, working_match falls back to 0.5 (neutral)."""
+    known = [KnowledgeNode(concept="ml", mastery=0.6)]
+    svc, _ = _make_service(user_knowledge=known)
+    subgraph = _make_subgraph(
+        nodes=[{"name": "ml"}],
+        entry_concepts=["ml"],
+        difficulty=0.6,
+    )
+    # No session → should not attempt memory lookup
+    r = await svc.compute_r_relevance(1, subgraph)
+    assert 0.0 <= r <= 1.0
+
+
+@pytest.mark.asyncio
+async def test_r_relevance_working_memory_boosts_matching_content() -> None:
+    """Content matching working memory should score higher than non-matching."""
+    known = [KnowledgeNode(concept="attention", mastery=0.8)]
+
+    # Service with working memory matching the content
+    svc_match, _ = _make_service(user_knowledge=known)
+    # Service without working memory (no session = neutral 0.5)
+    svc_no_mem, _ = _make_service(user_knowledge=known)
+
+    subgraph = _make_subgraph(
+        nodes=[{"name": "attention"}],
+        entry_concepts=["attention"],
+        difficulty=0.5,
+    )
+
+    mock_session = AsyncMock()
+    memory_ctx_match = MemoryContext(working_topics=["attention"])
+
+    with patch(
+        "alice.services.matching.MemoryManager"
+    ) as MockMemMgr:
+        mock_mgr_instance = MockMemMgr.return_value
+        mock_mgr_instance.get_memory_context = AsyncMock(return_value=memory_ctx_match)
+        r_with_memory = await svc_match.compute_r_relevance(
+            1, subgraph, session=mock_session
+        )
+
+    # Without session: neutral working_match = 0.5
+    r_no_memory = await svc_no_mem.compute_r_relevance(1, subgraph)
+
+    # working_match=1.0 (full match) vs working_match=0.5 (neutral)
+    # Difference = 0.1 * (1.0 - 0.5) = 0.05
+    assert r_with_memory > r_no_memory

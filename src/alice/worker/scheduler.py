@@ -23,6 +23,11 @@ BEAT_SCHEDULE = {
         "schedule": 1200.0,  # 20 minutes
         "options": {"queue": "push"},
     },
+    "retry-failed-graph-extractions-every-12-hours": {
+        "task": "alice.pipeline.tasks.task_retry_failed_graph_extractions",
+        "schedule": 43200.0,  # 12 hours
+        "options": {"queue": "pipeline"},
+    },
 }
 
 

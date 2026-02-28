@@ -13,13 +13,17 @@ from alice.bot.handlers.push import send_push
 from alice.graph.client import GraphClient
 from alice.graph.extractor import ContentSubgraph, ContentSubgraphEdge, ContentSubgraphNode
 from alice.graph.repository import GraphRepository
+from alice.graph.user_kg import UserKnowledgeGraph
+from alice.llm.protocol import LLMClient
 from alice.models.content import Content, PipelineStatus
 from alice.prompts import PromptManager
 from alice.prompts import prompt_manager as _default_pm
 from alice.schemas.content import ContentResponseSchema
+from alice.services.graphrag_query import GraphRAGQueryEngine
 from alice.services.matching import MatchingService
 from alice.services.push_scheduler import PushScheduler
 from alice.services.ranking import RankingService
+from alice.services.search import SearchService
 from alice.services.user_state import UserStateManager
 
 logger = structlog.get_logger(__name__)
@@ -42,6 +46,8 @@ class PushService:
         limit: int = 5,
         graph_client: GraphClient | None = None,
         content_type_filter: str | None = None,
+        search_service: SearchService | None = None,
+        llm_client: LLMClient | None = None,
     ) -> list[Content]:
         """Return up to ``limit`` indexed, unpushed content items ranked by P_score.
 
@@ -83,8 +89,55 @@ class PushService:
         if not candidates or graph_client is None:
             return candidates[:limit]
 
+        # --- GraphRAG candidate discovery ---
+        # Use the user's known concepts to find semantically related content
+        # that may not appear in the top p_score ordering.
+        if search_service and llm_client:
+            try:
+                user_kg = UserKnowledgeGraph(graph_client)
+                known = await user_kg.get_knowledge_map(user_id)
+                if known:
+                    top_concepts = sorted(
+                        known, key=lambda k: k.mastery, reverse=True
+                    )[:5]
+                    query_text = " ".join(
+                        k.concept.replace("_", " ") for k in top_concepts
+                    )
+                    engine = GraphRAGQueryEngine(
+                        graph_client=graph_client,
+                        search_service=search_service,
+                        llm_client=llm_client,
+                    )
+                    graphrag_results = await engine.query(
+                        text=query_text, user_id=user_id, limit=limit * 2
+                    )
+                    existing_ids = {c.id for c in candidates}
+                    extra_ids: list[int] = []
+                    for r in graphrag_results:
+                        try:
+                            cid = int(r.content_id)
+                            if cid not in existing_ids:
+                                extra_ids.append(cid)
+                        except (ValueError, TypeError):
+                            continue
+                    if extra_ids:
+                        extra_result = await session.execute(
+                            select(Content).where(
+                                Content.id.in_(extra_ids),
+                                Content.pipeline_status == PipelineStatus.indexed,
+                                Content.pushed_at.is_(None),  # type: ignore[union-attr]
+                            )
+                        )
+                        candidates.extend(list(extra_result.scalars().all()))
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "graphrag_candidate_discovery_failed",
+                    user_id=user_id,
+                    exc_info=True,
+                )
+
         # Personalise with user-specific matching scores
-        matching_svc = MatchingService(graph_client)
+        matching_svc = MatchingService(graph_client, search_service=search_service)
         ranking_svc = RankingService()
 
         # Apply user-mode push modifiers (daily/project/explore/low_energy)
@@ -95,7 +148,9 @@ class PushService:
         for content in candidates:
             subgraph = await self._reconstruct_subgraph(graph_client, content.id)
             if subgraph:
-                r_relevance = await matching_svc.compute_r_relevance(user_id, subgraph)
+                r_relevance = await matching_svc.compute_r_relevance(
+                    user_id, subgraph, content_id=content.id, session=session
+                )
             else:
                 r_relevance = 1.0
             p = ranking_svc.compute_p_score(

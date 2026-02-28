@@ -1,14 +1,17 @@
-"""Legacy Celery task stubs kept for backward compatibility.
+"""Legacy Celery task wrappers kept for backward compatibility.
 
-Active pipeline execution lives in ``alice.pipeline.tasks``. These stubs are
-retained so older task names continue to resolve if any existing producers or
-Beat schedules still reference ``alice.worker.tasks.*``.
+Active pipeline execution lives in ``alice.pipeline.tasks``. These wrappers
+are retained so older task names continue to resolve if any existing producers
+or Beat schedules still reference ``alice.worker.tasks.*``.
+
+Each wrapper forwards to the real pipeline task and logs a deprecation warning.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import warnings
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,57 +28,53 @@ from alice.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+_DEPRECATION_MSG = (
+    "Task name 'alice.worker.tasks.{name}' is deprecated. "
+    "Use 'alice.pipeline.tasks.{name}' instead."
+)
+
+
+def _deprecation_warn(name: str) -> None:
+    """Log and emit a deprecation warning for legacy task names."""
+    msg = _DEPRECATION_MSG.format(name=name)
+    logger.warning(msg)
+    warnings.warn(msg, DeprecationWarning, stacklevel=3)
+
 
 @celery_app.task(bind=True, name="alice.worker.tasks.task_run_gatekeeper")
 def task_run_gatekeeper(self, content_id: int) -> dict:
-    """
-    Stage 1: Run gatekeeper filter on content.
+    """Legacy wrapper — forwards to alice.pipeline.tasks.task_run_gatekeeper."""
+    _deprecation_warn("task_run_gatekeeper")
+    from alice.pipeline.tasks import task_run_gatekeeper as real_task  # noqa: PLC0415
 
-    Reads: content.pipeline_status == "fetched"
-    Writes: content.pipeline_status = "gatekept" OR "failed"
-    """
-    logger.info(f"Running gatekeeper for content_id={content_id}")
-    # Legacy stub. Real implementation: alice.pipeline.tasks.task_run_gatekeeper
-    return {"content_id": content_id, "stage": "gatekeeper", "status": "stub"}
+    return real_task(content_id)
 
 
 @celery_app.task(bind=True, name="alice.worker.tasks.task_run_understanding")
 def task_run_understanding(self, content_id: int) -> dict:
-    """
-    Stage 2: Run content understanding (DeepSeek).
+    """Legacy wrapper — forwards to alice.pipeline.tasks.task_run_understanding."""
+    _deprecation_warn("task_run_understanding")
+    from alice.pipeline.tasks import task_run_understanding as real_task  # noqa: PLC0415
 
-    Reads: content.pipeline_status == "gatekept"
-    Writes: content.summary, key_points, domains + pipeline_status = "understood"
-    """
-    logger.info(f"Running understanding for content_id={content_id}")
-    # Legacy stub. Real implementation: alice.pipeline.tasks.task_run_understanding
-    return {"content_id": content_id, "stage": "understanding", "status": "stub"}
+    return real_task(content_id)
 
 
 @celery_app.task(bind=True, name="alice.worker.tasks.task_run_scoring")
 def task_run_scoring(self, content_id: int) -> dict:
-    """
-    Stage 3: Run quality scoring.
+    """Legacy wrapper — forwards to alice.pipeline.tasks.task_run_scoring."""
+    _deprecation_warn("task_run_scoring")
+    from alice.pipeline.tasks import task_run_scoring as real_task  # noqa: PLC0415
 
-    Reads: content.pipeline_status == "understood"
-    Writes: content.quality_score + pipeline_status = "scored"
-    """
-    logger.info(f"Running scoring for content_id={content_id}")
-    # Legacy stub. Real implementation: alice.pipeline.tasks.task_run_scoring
-    return {"content_id": content_id, "stage": "scoring", "status": "stub"}
+    return real_task(content_id)
 
 
 @celery_app.task(bind=True, name="alice.worker.tasks.task_run_indexing")
 def task_run_indexing(self, content_id: int) -> dict:
-    """
-    Stage 4: Index content for delivery.
+    """Legacy wrapper — forwards to alice.pipeline.tasks.task_run_indexing."""
+    _deprecation_warn("task_run_indexing")
+    from alice.pipeline.tasks import task_run_indexing as real_task  # noqa: PLC0415
 
-    Reads: content.pipeline_status == "scored"
-    Writes: content.pipeline_status = "indexed"
-    """
-    logger.info(f"Running indexing for content_id={content_id}")
-    # Legacy stub. Real implementation: alice.pipeline.tasks.task_run_indexing
-    return {"content_id": content_id, "stage": "indexing", "status": "stub"}
+    return real_task(content_id)
 
 
 @celery_app.task(bind=True, name="alice.worker.tasks.task_fetch_all_sources")
@@ -213,11 +212,18 @@ async def fetch_all_sources_once(
 
 @celery_app.task(bind=True, name="alice.worker.tasks.task_push_batch")
 def task_push_batch(self, user_id: int) -> dict:
-    """
-    Push a batch of content to a user via Telegram.
+    """Legacy wrapper — forwards to alice.pipeline.tasks.task_push_batch.
 
-    Triggered by: Celery Beat or manual trigger
+    Note: the real task requires chat_id; this wrapper cannot supply it.
+    A deprecation warning is emitted so callers migrate to the pipeline task.
     """
-    logger.info(f"Pushing content batch to user_id={user_id}")
-    # Legacy stub. Real implementation: alice.pipeline.tasks.task_push_batch
-    return {"user_id": user_id, "status": "stub", "items_pushed": 0}
+    _deprecation_warn("task_push_batch")
+    logger.error(
+        "task_push_batch called via legacy name without chat_id; "
+        "migrate to alice.pipeline.tasks.task_push_batch"
+    )
+    return {
+        "user_id": user_id,
+        "status": "error",
+        "error": "Legacy task_push_batch requires migration: missing chat_id parameter",
+    }

@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import structlog
 
 from alice.graph.client import GraphClient
 from alice.graph.extractor import ContentSubgraph
 from alice.graph.user_kg import UserKnowledgeGraph
+from alice.services.memory_system import MemoryContext, MemoryManager
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+from alice.services.search import SearchService
 
 
 class _Logger(Protocol):
@@ -75,10 +80,12 @@ class MatchingService:
         self,
         client: GraphClient,
         recommend_threshold: float = DEFAULT_RECOMMEND_THRESHOLD,
+        search_service: SearchService | None = None,
     ) -> None:
         self._client = client
         self._user_kg = UserKnowledgeGraph(client)
         self._threshold = recommend_threshold
+        self._search_service = search_service
 
     async def compute_match_score(
         self,
@@ -236,30 +243,111 @@ class MatchingService:
         self,
         user_id: int,
         subgraph: ContentSubgraph,
+        content_id: int | None = None,
+        session: AsyncSession | None = None,
     ) -> float:
-        """Full R_relevance = α·KG_match + β·Working_match + γ·Preference_match + δ·Gap_fill.
+        """Full R_relevance = α·KG_match + β·Text_relevance + γ·Working_match + δ·Gap_fill.
 
-        Phase 2 implementation:
+        Components:
           - KG_match = Match_score from this service (α=0.6)
-          - Working_match = 0.5 placeholder (Phase 3 user state)
-          - Preference_match = 0.5 placeholder (Phase 3 feedback model)
+          - Text_relevance = Meilisearch text similarity (β=0.1)
+          - Working_match = overlap between content concepts and user's
+            working memory topics via MemoryManager (γ=0.1)
           - Gap_fill from get_knowledge_gaps (δ=0.2 bonus when gaps exist)
 
-        Phase 3 will replace placeholders with real values.
+        When *session* is provided, working memory context is fetched from
+        the database; otherwise falls back to a neutral 0.5.
         """
         result = await self.compute_match_score(user_id, subgraph)
         kg_match = result.match_score
 
-        # Phase 2 placeholders
-        working_match = 0.5  # Phase 3: user current project state
-        preference_match = 0.5  # Phase 3: feedback like/dislike ratio per topic
+        # Text-based relevance via Meilisearch
+        known_concepts = await self._user_kg.get_knowledge_map(user_id)
+        mastery_map: dict[str, float] = {kn.concept: kn.mastery for kn in known_concepts}
+        text_relevance = await self._compute_text_relevance(content_id, mastery_map)
+
+        # Working memory: use real memory context when session available
+        if session is not None:
+            memory_mgr = MemoryManager()
+            memory_ctx = await memory_mgr.get_memory_context(session, user_id)
+            working_match = self._compute_working_memory_match(subgraph, memory_ctx)
+        else:
+            working_match = 0.5  # neutral fallback when no DB session
 
         # Gap fill bonus: content has entry concepts user doesn't know but can reach
         gap_fill = await self._compute_gap_fill_bonus(user_id, subgraph)
 
         # Weights: α=0.6, β=0.1, γ=0.1, δ=0.2
-        r_relevance = 0.6 * kg_match + 0.1 * working_match + 0.1 * preference_match + 0.2 * gap_fill
+        r_relevance = 0.6 * kg_match + 0.1 * text_relevance + 0.1 * working_match + 0.2 * gap_fill
         return max(0.0, min(1.0, r_relevance))
+
+    def _compute_working_memory_match(
+        self,
+        subgraph: ContentSubgraph,
+        memory_ctx: MemoryContext,
+    ) -> float:
+        """Score content relevance to the user's working memory topics.
+
+        Returns the fraction of content concept nodes whose name overlaps
+        (exact or substring, case-insensitive) with a working memory topic.
+        When the user has no working topics or the content has no concept
+        nodes, returns 0.5 (neutral).
+        """
+        if not memory_ctx.working_topics:
+            return 0.5
+
+        content_concepts = {n.name.lower() for n in subgraph.nodes}
+        if not content_concepts:
+            return 0.5
+
+        working_lower = {t.lower() for t in memory_ctx.working_topics}
+
+        matches = 0
+        for concept in content_concepts:
+            for topic in working_lower:
+                if concept == topic or topic in concept or concept in topic:
+                    matches += 1
+                    break
+
+        return matches / len(content_concepts)
+
+    async def _compute_text_relevance(
+        self,
+        content_id: int | None,
+        mastery_map: dict[str, float],
+    ) -> float:
+        """Compute text-based relevance using Meilisearch full-text search.
+
+        Searches Meilisearch with the user's top known concepts and checks
+        whether the target content appears in the results.  Higher rank in
+        the result list → higher relevance score.
+
+        Returns 0.5 (neutral) when search_service is not available or
+        content_id is not provided.
+        """
+        if self._search_service is None or content_id is None:
+            return 0.5
+
+        if not mastery_map:
+            return 0.0
+
+        # Use top concepts by mastery as the search query
+        top_concepts = sorted(mastery_map.items(), key=lambda x: x[1], reverse=True)[:5]
+        query = " ".join(name.replace("_", " ") for name, _ in top_concepts)
+
+        try:
+            result = self._search_service.search(query, limit=20)
+            hits = result.get("hits", [])
+            content_id_str = str(content_id)
+            for i, hit in enumerate(hits):
+                if str(hit.get("id")) == content_id_str:
+                    # Found — score based on rank position: top = 1.0, bottom ≈ 0.05
+                    return 1.0 - (i / max(len(hits), 1))
+            # Content not in results → low text relevance
+            return 0.1
+        except Exception:  # noqa: BLE001
+            logger.debug("text_relevance_search_failed", content_id=content_id)
+            return 0.5
 
     async def _compute_gap_fill_bonus(
         self,

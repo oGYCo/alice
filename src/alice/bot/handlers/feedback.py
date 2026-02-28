@@ -89,6 +89,22 @@ async def _handle_feedback_callback(
         session.add(feedback)
         await session.commit()
 
+        # Create FSRS review cards for positive feedback
+        if feedback_type == FeedbackType.valuable_learned:
+            try:
+                from alice.services.review_service import ReviewCardService  # noqa: PLC0415
+
+                svc = ReviewCardService(session)
+                await svc.create_cards_from_content(user_id, content_id)
+                await session.commit()
+            except Exception:
+                logger.warning(
+                    "review_card_creation_failed: user=%d content=%d",
+                    user_id,
+                    content_id,
+                    exc_info=True,
+                )
+
     logger.info(
         "Feedback stored: user=%d content=%d type=%s",
         user_id,

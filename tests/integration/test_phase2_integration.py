@@ -161,9 +161,7 @@ def _make_content(
 
 
 def _make_user(chat_id: int = 100001) -> User:
-    u = User()
-    u.telegram_chat_id = chat_id
-    u.preferences = {}
+    u = User(id=chat_id, telegram_chat_id=chat_id, preferences={})
     return u
 
 

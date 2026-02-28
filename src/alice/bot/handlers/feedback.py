@@ -6,9 +6,11 @@ from typing import Any
 
 from aiogram import Bot
 from aiogram.types import CallbackQuery
+from sqlalchemy import select
 
 from alice.db import AsyncSessionLocal
 from alice.models.feedback import Feedback
+from alice.models.user import User
 from alice.schemas.feedback import FeedbackType
 
 logger = logging.getLogger(__name__)
@@ -81,6 +83,13 @@ async def _handle_feedback_callback(
     user_id = query.from_user.id
 
     async with session_factory() as session:
+        # Ensure user exists (Telegram ID = users.id = users.telegram_chat_id)
+        result = await session.execute(select(User).where(User.id == user_id))
+        if result.scalar_one_or_none() is None:
+            user = User(id=user_id, telegram_chat_id=user_id, preferences={})
+            session.add(user)
+            await session.flush()
+
         feedback = Feedback(
             content_id=content_id,
             user_id=user_id,
